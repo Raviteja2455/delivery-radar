@@ -1,0 +1,60 @@
+name: Nightly NSE update
+
+# NSE publishes its end-of-day files by early evening. GitHub runs scheduled jobs in UTC
+# and can start them 5-30 minutes late, so the main run is set for 21:37 IST to be ready
+# around 10 PM, with a catch-up run at 23:07 IST for evenings when NSE is late.
+on:
+  schedule:
+    - cron: "7 16 * * 1-5"    # 21:37 IST, Monday to Friday
+    - cron: "37 17 * * 1-5"   # 23:07 IST catch-up
+  workflow_dispatch: {}       # "Run workflow" button in the Actions tab
+
+permissions:
+  contents: write   # save the day's data back to the repository
+  pages: write      # publish the app
+  id-token: write
+
+concurrency:
+  group: nightly-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Fetch NSE files and rebuild the app data
+        run: python radar.py update
+
+      - name: Save the new data
+        run: |
+          git config user.name "delivery-radar-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data docs/data.json
+          if git diff --cached --quiet; then
+            echo "No new data."
+          else
+            git commit -m "NSE data, $(TZ=Asia/Kolkata date '+%d %b %Y %H:%M IST')"
+            git push
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

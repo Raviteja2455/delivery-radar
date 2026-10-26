@@ -1,0 +1,15 @@
+{
+  "extra_symbols": [],
+  "notes": {
+    "HDFCBANK": {"bias": 1, "as_of": "2026-09-30", "text": "Mutual fund stake rose to 31.9% from 26.0% a year earlier while FPIs cut theirs to 39.4% from 48.4%."},
+    "ICICIBANK": {"bias": 1, "as_of": "2026-09-30", "text": "Among mutual funds' five most-bought stocks in September 2026."},
+    "RELIANCE": {"bias": 1, "as_of": "2026-09-30", "text": "Mutual funds' most-bought stock in September 2026, about ₹6,000 cr net."},
+    "ITC": {"bias": 1, "as_of": "2026-10-08", "text": "Block deal at ₹257.35: GQG sold 2.91%; Fidelity, ICICI Pru MF, SBI MF and Nippon MF bought. The trade idea holds only while ITC stays above ₹257."},
+    "COALINDIA": {"bias": 1, "as_of": "2026-06-30", "text": "FIIs raised their stake by 2.2 percentage points in the year to June 2026 while cutting most Nifty stocks."},
+    "HINDALCO": {"bias": 1, "as_of": "2026-06-30", "text": "FIIs raised their stake by 4.2 percentage points in the year to June 2026."},
+    "TCS": {"bias": -1, "as_of": "2026-09-30", "text": "Among mutual funds' most-sold stocks in September 2026."},
+    "WIPRO": {"bias": -1, "as_of": "2026-09-30", "text": "Among mutual funds' most-sold stocks in September 2026."},
+    "LT": {"bias": -1, "as_of": "2026-09-30", "text": "Among mutual funds' most-sold stocks in September 2026."},
+    "BSE": {"bias": -1, "as_of": "2026-09-30", "text": "Joined the Nifty 50 on 30 Sep 2026; the index-entry buying was a one-off, so don't chase it."}
+  }
+}
