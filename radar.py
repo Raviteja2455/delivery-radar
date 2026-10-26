@@ -284,6 +284,16 @@ def parse_fiidii(text):
 
 
 # ----------------------------------------------------------------------------- update
+def holiday_copies(eq):
+    """Stored days whose delivery file repeats the previous stored day's exactly.
+
+    On some holidays NSE answers that day's address with the previous session's file instead of
+    "not found". A real session never repeats every stock's prices and volumes, so an exact
+    repeat is a holiday, not a trading day."""
+    days = sorted(d for d in eq if eq[d])
+    return {d for prev, d in zip(days, days[1:]) if eq[d] == eq[prev]}
+
+
 def update(src, today=None):
     now = datetime.now(IST)
     today = today or now.date()
@@ -307,6 +317,13 @@ def update(src, today=None):
         missing.setdefault(k, set())
     fetched = {"eq": 0, "idx": 0, "fo": 0}
 
+    # Earlier versions saved those holiday copies as trading days; drop any still stored.
+    stored = {p.stem: jload(p, {}).get("rows", {}) for p in (DATA / "eq").glob("*.json")}
+    for iso in sorted(holiday_copies(stored)):
+        (DATA / "eq" / f"{iso}.json").unlink()
+        missing["eq"].add(iso)
+        print(f"Removed eq {iso}: it repeated the previous session's file, so it was a holiday")
+
     for kind in ("eq", "idx", "fo"):  # eq first: it tells us which weekdays were holidays
         for d in weekdays(today - timedelta(days=LOOKBACK[kind]), today):
             iso = d.isoformat()
@@ -322,16 +339,25 @@ def update(src, today=None):
                     missing[kind].add(iso)
                 continue
             if kind == "eq":
-                _, rows = parse_eq(blob, uset)
+                day, rows = parse_eq(blob, uset)
+            elif kind == "fo":
+                day, rows = parse_fo(blob, uset)
+            else:
+                day, rows = parse_idx(blob)
+            if day and day != d:
+                # A holiday answered with the previous session's file: saving it would count the
+                # holiday as a trading day and repeat that session in every average.
+                print(f"{kind} {iso}: NSE sent the file for {day.isoformat()}, so {iso} was not a trading day")
+                if d < today - timedelta(days=3):
+                    missing[kind].add(iso)
+                continue
+            if kind == "eq":
                 if rows:
                     jsave(path, {"u": universe, "rows": rows})
             elif kind == "fo":
-                _, rows = parse_fo(blob, uset)
                 jsave(path, rows)
-            else:
-                _, rows = parse_idx(blob)
-                if rows:
-                    jsave(path, rows)
+            elif rows:
+                jsave(path, rows)
             fetched[kind] += 1
 
     deals = jload(DATA / "deals.json", [])
@@ -596,7 +622,8 @@ def build():
     names = meta.get("names", {})
     universe = sorted(set(meta.get("nifty50", [])) | set(cfg["extra_symbols"]))
     eq = {p.stem: jload(p, {}).get("rows", {}) for p in sorted((DATA / "eq").glob("*.json"))}
-    days = sorted(d for d in eq if eq[d])
+    copies = holiday_copies(eq)  # never let a holiday copy count as a session, even if one is stored
+    days = sorted(d for d in eq if eq[d] and d not in copies)
     if not days:
         sys.exit("No delivery data stored yet; run `python radar.py update` first.")
     fo = {p.stem: jload(p, {}) for p in (DATA / "fo").glob("*.json")}

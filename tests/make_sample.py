@@ -8,6 +8,7 @@ import csv
 import io
 import json
 import random
+import shutil
 import sys
 import zipfile
 from datetime import date, timedelta
@@ -40,7 +41,10 @@ SYMBOLS = {  # symbol: (company, industry, starting price)
     "TITAN": ("Titan Company Ltd.", "Consumer Durables", 3400), "TRENT": ("Trent Ltd.", "Consumer Services", 4900),
     "ULTRACEMCO": ("UltraTech Cement Ltd.", "Construction Materials", 11800), "WIPRO": ("Wipro Ltd.", "Information Technology", 240),
 }
-HOLIDAYS = {date(2026, 1, 26), date(2026, 10, 2)}
+HOLIDAYS = {date(2026, 1, 26), date(2026, 10, 2), date(2026, 10, 20)}
+# NSE answers some holiday addresses with the previous session's file instead of "not found";
+# these holidays reproduce that, so the pipeline must notice the date inside the file.
+SERVED_AS_COPY = {date(2026, 10, 2), date(2026, 10, 20)}
 SPLIT = ("BEL", date(2026, 9, 15), 2)  # 1:2 split: price halves, quantities double
 EXPIRIES = [date(2025, 12, 30)] + [date(2026, m, d) for m, d in
             [(1, 27), (2, 24), (3, 31), (4, 28), (5, 26), (6, 30), (7, 28), (8, 25), (9, 29), (10, 27), (11, 24), (12, 29)]]
@@ -164,6 +168,10 @@ def main(out, last):
     flows = [{"category": "DII **", "date": d.strftime("%d-%b-%Y"), "buyValue": "13402.08", "sellValue": "12220.04", "netValue": "1182.04"},
              {"category": "FII/FPI *", "date": d.strftime("%d-%b-%Y"), "buyValue": "16314.46", "sellValue": "15111.32", "netValue": "-4203.14"}]
     (out / "fiidiiTradeReact.json").write_text(json.dumps(flows))
+    for h in sorted(x for x in SERVED_AS_COPY if x <= last):
+        p = max(x for x in days if x < h)
+        for name in ("sec_bhavdata_full_{:%d%m%Y}.csv", "ind_close_all_{:%d%m%Y}.csv"):
+            shutil.copyfile(out / name.format(p), out / name.format(h))
     print(f"Wrote {len(days)} trading days to {out}")
 
 
