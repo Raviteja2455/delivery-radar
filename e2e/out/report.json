@@ -1,0 +1,181 @@
+[
+ {
+  "scenario": "1-live-390-light",
+  "width": 390,
+  "dark": false,
+  "blocked": [],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   },
+   {
+    "host": "scanner.tradingview.com",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   }
+  ],
+  "errors": [],
+  "seconds_to_quotes": 0.3,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live · 7:05:16 pm · crude 10 min late\nRefresh\nGIFT Nifty · Nov\n22,730.5\n−131.5 (−0.58%)\nBrent · Jan\n$110.20\n−0.54 (−0.49%)\nWTI $101.17 −0.6%\nUSD/INR\n95.11\n−0.07 (−0.07%)\n\nLower start indicated: GIFT Nov is 77 points (0.34%) below the Nifty Nov futures close of 22,808.",
+  "clipped": [],
+  "page_hscroll": false,
+  "after_23s": "Live · 7:05:36 pm · crude 10 min late",
+  "refreshed": true,
+  "tv_calls": 2
+ },
+ {
+  "scenario": "2-live-390-dark",
+  "width": 390,
+  "dark": true,
+  "blocked": [],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   }
+  ],
+  "errors": [],
+  "seconds_to_quotes": 0.2,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live · 7:05:42 pm · crude 10 min late\nRefresh\nGIFT Nifty · Nov\n22,732.0\n−130 (−0.57%)\nBrent · Jan\n$110.22\n−0.52 (−0.47%)\nWTI $101.11 −0.6%\nUSD/INR\n95.11\n−0.07 (−0.07%)\n\nLower start indicated: GIFT Nov is 76 points (0.33%) below the Nifty Nov futures close of 22,808.",
+  "clipped": [],
+  "page_hscroll": false,
+  "tv_calls": 1
+ },
+ {
+  "scenario": "3-live-360",
+  "width": 360,
+  "dark": false,
+  "blocked": [],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   }
+  ],
+  "errors": [],
+  "seconds_to_quotes": 0.2,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live · 7:05:45 pm · crude 10 min late\nRefresh\nGIFT Nifty · Nov\n22,732.0\n−130 (−0.57%)\nBrent · Jan\n$110.22\n−0.52 (−0.47%)\nWTI $101.11 −0.6%\nUSD/INR\n95.11\n−0.07 (−0.07%)\n\nLower start indicated: GIFT Nov is 76 points (0.33%) below the Nifty Nov futures close of 22,808.",
+  "clipped": [
+   "WTI $101.11 −0.6%"
+  ],
+  "page_hscroll": false,
+  "tv_calls": 1
+ },
+ {
+  "scenario": "4-live-412",
+  "width": 412,
+  "dark": false,
+  "blocked": [],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   }
+  ],
+  "errors": [],
+  "seconds_to_quotes": 0.2,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live · 7:05:48 pm · crude 10 min late\nRefresh\nGIFT Nifty · Nov\n22,732.0\n−130 (−0.57%)\nBrent · Jan\n$110.22\n−0.52 (−0.47%)\nWTI $101.11 −0.6%\nUSD/INR\n95.11\n−0.07 (−0.07%)\n\nLower start indicated: GIFT Nov is 76 points (0.33%) below the Nifty Nov futures close of 22,808.",
+  "clipped": [],
+  "page_hscroll": false,
+  "tv_calls": 1
+ },
+ {
+  "scenario": "5-tradingview-blocked",
+  "width": 390,
+  "dark": false,
+  "blocked": [
+   "scanner.tradingview.com"
+  ],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "failed": "net::ERR_FAILED"
+   },
+   {
+    "host": "priceapi.moneycontrol.com",
+    "status": 200,
+    "acao": "*"
+   },
+   {
+    "host": "quote.cnbc.com",
+    "status": 200,
+    "acao": "*"
+   }
+  ],
+  "errors": [
+   "Failed to load resource: net::ERR_FAILED"
+  ],
+  "seconds_to_quotes": 0.3,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live · 7:05:51 pm · crude 10 min late · backup feed\nRefresh\nGIFT Nifty\n22,729.0\n−83 (−0.37%)\nBrent · Jan\n$110.17\n−0.57 (−0.51%)\nWTI $101.12 −0.6%\nUSD/INR\n95.12\n−0.07 (−0.07%)",
+  "clipped": [
+   "Live · 7:05:51 pm · crude 10 min late · backup feed"
+  ],
+  "page_hscroll": false,
+  "tv_calls": 1
+ },
+ {
+  "scenario": "6-all-blocked",
+  "width": 390,
+  "dark": false,
+  "blocked": [
+   "scanner.tradingview.com",
+   "quote.cnbc.com",
+   "priceapi.moneycontrol.com"
+  ],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "failed": "net::ERR_FAILED"
+   },
+   {
+    "host": "quote.cnbc.com",
+    "failed": "net::ERR_FAILED"
+   },
+   {
+    "host": "priceapi.moneycontrol.com",
+    "failed": "net::ERR_FAILED"
+   }
+  ],
+  "errors": [
+   "Failed to load resource: net::ERR_FAILED",
+   "Failed to load resource: net::ERR_FAILED",
+   "Failed to load resource: net::ERR_FAILED"
+  ],
+  "seconds_to_quotes": 0.2,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live quotes aren't reachable right now. Retrying…\nRefresh",
+  "clipped": [
+   "Live quotes aren't reachable right now. Retrying…"
+  ],
+  "page_hscroll": false,
+  "tv_calls": 1
+ }
+]
