@@ -21,6 +21,26 @@ It refreshes itself every weekday night from NSE's public end-of-day files, usin
 After that it runs by itself at about 9:40 PM IST, Monday to Friday, with a catch-up run at about 11:10 PM for evenings
 when NSE publishes late. GitHub can start scheduled jobs 5–30 minutes late, so expect fresh data by roughly 10 PM.
 
+Changes to the page itself (`docs/index.html`) are published within a minute or two by the *Publish app page* job.
+
+## The live strip
+
+Above the regime band, the app shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR. Your phone fetches
+these itself every 20 seconds while the app is open, and pauses when it is in the background, so they don't depend on
+the nightly job.
+
+| Item | Contract shown | Delay |
+|---|---|---|
+| GIFT Nifty | The nearest monthly contract still trading (it switches to the next month at 3:30 PM on expiry day) | Real time |
+| Brent, WTI | The most-traded contract, named after the label (Brent moves to the next month a few days before expiry) | 10 minutes |
+| USD/INR | Spot rate | Real time |
+
+Outside NSE hours, the line under the strip compares GIFT Nifty with the closing price of the NSE Nifty futures for the
+same month (a gap within ±0.15% reads as a flat start). During NSE hours that line pauses, because NSE's free prices
+are 15 minutes late. Quotes come from TradingView's public quote service; if it doesn't answer, CNBC (crude, USD/INR)
+and Moneycontrol (GIFT Nifty) fill in and the strip says "backup feed". The last prices are kept on the phone, so the
+strip still shows them, marked with their time, when you are offline.
+
 ## The MTF tab
 
 The MTF tab runs the whole MTF plan on every stock each night and on every trade you log.

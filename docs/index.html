@@ -193,6 +193,28 @@ td.hi { color: var(--deliv); font-weight: 600; }
 .rules li { margin-bottom: 8px; }
 .tag.mtf { color: var(--signal); }
 
+/* live cues */
+.live { background: var(--sheet); border-radius: 12px; padding: 9px 14px 12px; margin: 12px 0 0; }
+.live-top { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); min-height: 28px; }
+.live-top .beat { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--muted-bar); }
+.live-top .beat.ok { background: var(--up); }
+.live-top .beat.warn { background: var(--amber); }
+.live-top .when { flex: 1 1 auto; min-width: 0; }
+.live-top .when b { color: var(--ink); font-weight: 500; }
+.live-top button { flex: 0 0 auto; border: 0; background: none; color: var(--deliv); font: 500 14px var(--font); padding: 4px 0 4px 8px; cursor: pointer; }
+.live-top button:disabled { color: var(--ink-2); cursor: default; }
+.lfigs { display: grid; grid-template-columns: repeat(3, minmax(0, max-content)); justify-content: space-between; gap: 6px 12px; margin-top: 6px; }
+.lf { min-width: 0; }
+.lf .k { font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf .k i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--muted-bar); margin-right: 5px; vertical-align: 1.5px; }
+.lf .k i.on { background: var(--up); }
+.lf .v { font: 600 18px/1.2 var(--font-c); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lf .s, .lf .n { font: 500 13.5px/1.3 var(--font-c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.lf .n { color: var(--ink-2); font-weight: 400; }
+.live-cue { margin: 10px 0 0; padding-top: 9px; border-top: 1px solid var(--rule); font-size: 13.5px; color: var(--ink-2); }
+.live-cue b { color: var(--ink); font-weight: 600; }
+.live-msg { margin: 6px 0 0; font-size: 13.5px; color: var(--ink-2); }
+
 @media (min-width: 560px) {
   .snap { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
@@ -202,6 +224,12 @@ td.hi { color: var(--deliv); font-weight: 600; }
 @media (prefers-reduced-motion: no-preference) {
   #detail:not([hidden]), #mtf-view:not([hidden]) { animation: rise .18s ease-out; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .lf .v.tick-up { animation: tickup 1.6s ease-out; }
+  .lf .v.tick-dn { animation: tickdn 1.6s ease-out; }
+  @keyframes tickup { from { color: var(--up); } }
+  @keyframes tickdn { from { color: var(--down); } }
+  .live-top .beat.ok.fresh { animation: beat 1.2s ease-out; }
+  @keyframes beat { from { box-shadow: 0 0 0 0 var(--up); } to { box-shadow: 0 0 0 7px transparent; } }
 }
 </style>
 </head>
@@ -214,6 +242,9 @@ td.hi { color: var(--deliv); font-weight: 600; }
       <button class="tab" id="tab-stocks" type="button" aria-selected="true">Stocks</button>
       <button class="tab" id="tab-mtf" type="button" aria-selected="false">MTF<span class="n" id="mtf-count"></span></button>
     </nav>
+    <section class="live" id="live" aria-label="Live market cues">
+      <div class="live-top"><span class="beat" aria-hidden="true"></span><span class="when">Fetching live quotes…</span></div>
+    </section>
   </header>
   <main id="list-view">
     <details class="help">
@@ -224,6 +255,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         <p>The bar's length is today's volume against its 20-day average; the dashed line marks a normal day (1×) and the bar is full at 2.5×. The dark part is the share that was delivered. The black tick marks the 5-day average delivery %. A long, mostly dark bar on an up day is the footprint of real buying.</p>
         <p>The score counts six signals:</p>
         <ol id="sig-help"></ol>
+        <p>The live strip shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR, refreshed every 20 seconds while the app is open. A green dot means that market is trading now. GIFT Nifty is real time; crude runs 10 minutes behind. Each uses its most-traded contract, named after the label. Outside NSE hours the line under the strip compares GIFT Nifty with the close of the Nifty futures for the same month, which is the usual read on how the next session will open.</p>
         <p>The band at the top applies your MTF regime rule: red means cash only, amber allows up to 1.5×, green up to 2×. The MTF tab runs the full entry, sizing and exit rules on every stock.</p>
       </div>
     </details>
@@ -240,6 +272,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
 
     <footer class="foot">
       <p>Source: NSE end-of-day files (security-wise delivery, F&amp;O bhavcopy, bulk and block deals, index closes and FII/DII figures). Updated every weekday night.</p>
+      <p>Live strip: TradingView quotes (crude delayed 10 minutes), with CNBC and Moneycontrol as backups.</p>
       <p>For information only. Not investment advice.</p>
     </footer>
   </main>
@@ -928,6 +961,234 @@ td.hi { color: var(--deliv); font-weight: 600; }
       h("p", { class: "foot", text: "Checks run on NSE's closing data, so act in the next session. For information only, not investment advice." }));
   }
 
+  // ---------------------------------------------------------------- live cues
+  // GIFT Nifty, crude in US$ and USD/INR, fetched by the browser itself every 20 seconds while the page is open.
+  // TradingView's quote scanner answers everything in one request; CNBC (crude, USD/INR) and Moneycontrol
+  // (GIFT Nifty) step in for anything it doesn't return. All three allow calls from any web page.
+  const Live = (() => {
+    const TV_URL = "https://scanner.tradingview.com/global/scan";
+    const TV_COLS = ["close", "change", "change_abs", "update_mode", "volume", "current_session", "expiration"];
+    const CNBC_URL = "https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=" +
+      encodeURIComponent("@LCO.1|@LCO.2|@CL.1|@CL.2|INR=") +
+      "&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json&events=1";
+    const MC_URL = "https://priceapi.moneycontrol.com/technicalCompanyData/globalMarket/" +
+      "getGlobalIndicesListingData?view=overview&deviceType=W";
+    const EVERY = 20000, RETRY = 45000, TIMEOUT = 8000, LIVE_FOR = 90000, KEY = "dr-live";
+    const CODES = "FGHJKMNQUVXZ";
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const num = (s) => {
+      if (s == null || s === "") return null;
+      const x = parseFloat(String(s).replace(/[,%+]/g, ""));
+      return Number.isFinite(x) ? x : null;
+    };
+    let last = (() => {
+      try { const c = JSON.parse(localStorage.getItem(KEY) || "null"); return c && c.at && Date.now() - c.at < 4 * 864e5 ? c : null; }
+      catch { return null; }
+    })();
+    let busy = false, failing = false, timer = null, lastTry = 0;
+
+    // The clock in India, whatever the phone's own time zone.
+    function ist(d = new Date()) {
+      const p = {};
+      for (const x of new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric", month: "numeric",
+        day: "numeric", hour: "numeric", minute: "numeric", weekday: "short", hourCycle: "h23" }).formatToParts(d)) p[x.type] = x.value;
+      const y = +p.year, m = +p.month, day = +p.day;
+      return { y, m, ymd: y * 10000 + m * 100 + day, mins: (+p.hour % 24) * 60 + +p.minute, wd: p.weekday };
+    }
+    // Futures month code k months after the current Indian month, e.g. k = 1 in Oct 2026 is "X2026" (Nov).
+    const month = (t, k) => { const i = t.m - 1 + k; return { code: CODES[i % 12] + (t.y + Math.floor(i / 12)), mon: MON[i % 12] }; };
+    // NSE and NSE IX monthly Nifty contracts stop trading at 3:30 pm IST on expiry day.
+    const alive = (o, t) => o.expiration == null || o.expiration > t.ymd || (o.expiration === t.ymd && t.mins < 930);
+
+    function getJSON(url, opts) {
+      const ctl = new AbortController();
+      const stop = setTimeout(() => ctl.abort(), TIMEOUT);
+      return fetch(url, { ...opts, signal: ctl.signal, cache: "no-store" })
+        .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+        .finally(() => clearTimeout(stop));
+    }
+
+    async function fromTradingView() {
+      const t = ist();
+      const gift = [0, 1, 2].map((k) => month(t, k));
+      const brent = [1, 2, 3, 4].map((k) => month(t, k));
+      const wti = [1, 2, 3].map((k) => month(t, k));
+      const tickers = [...gift.map((g) => "NSEIX:NIFTY" + g.code), ...gift.map((g) => "NSE:NIFTY" + g.code),
+        "NSEIX:NIFTY1!", "NSE:NIFTY", "ICEEUR:BRN1!", ...brent.map((b) => "ICEEUR:BRN" + b.code),
+        "NYMEX:CL1!", ...wti.map((w) => "NYMEX:CL" + w.code), "FX_IDC:USDINR"];
+      // text/plain keeps this a "simple" cross-site request, so the browser sends it without a preflight.
+      const j = await getJSON(TV_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        body: JSON.stringify({ symbols: { tickers, query: { types: [] } }, columns: TV_COLS }) });
+      const q = {};
+      for (const row of j.data || []) {
+        const o = {};
+        TV_COLS.forEach((c, i) => { o[c] = row.d[i]; });
+        if (typeof o.close === "number") q[row.s] = o;
+      }
+      const quote = (o, mon) => o && { v: o.close, chg: o.change_abs, pct: o.change, open: o.current_session === "market",
+        mon: mon || null, delay: Math.round(+((/delayed_streaming_(\d+)/.exec(o.update_mode || "") || [])[1] || 0) / 60) };
+      const out = {};
+      // GIFT Nifty: the nearest contract still trading. TradingView's own "front" symbol keeps pointing at an
+      // expired contract until the next day, so it is only a fallback here.
+      const g = gift.find((x) => q["NSEIX:NIFTY" + x.code] && alive(q["NSEIX:NIFTY" + x.code], t));
+      if (g) {
+        out.gift = quote(q["NSEIX:NIFTY" + g.code], g.mon);
+        const f = q["NSE:NIFTY" + g.code];
+        if (f) out.fut = { v: f.close, mon: g.mon };
+      } else if (q["NSEIX:NIFTY1!"]) out.gift = quote(q["NSEIX:NIFTY1!"]);
+      if (q["NSE:NIFTY"]) out.nseOpen = q["NSE:NIFTY"].current_session === "market";
+      // Crude: TradingView's continuous contract, which rolls to the most-traded month before expiry.
+      // The month is named by finding the dated contract with the same price.
+      const busiest = (root, months) => {
+        const o = q[root + "1!"];
+        const dated = months.map((x) => [x, q[root + x.code]]).filter(([, e]) => e);
+        if (o) {
+          const twin = dated.filter(([, e]) => e.close === o.close)
+            .sort((a, b) => Math.abs((a[1].volume || 0) - (o.volume || 0)) - Math.abs((b[1].volume || 0) - (o.volume || 0)))[0];
+          return quote(o, twin && twin[0].mon);
+        }
+        const best = dated.filter(([, e]) => alive(e, t)).sort((a, b) => (b[1].volume || 0) - (a[1].volume || 0))[0];
+        return best ? quote(best[1], best[0].mon) : null;
+      };
+      out.brent = busiest("ICEEUR:BRN", brent);
+      out.wti = busiest("NYMEX:CL", wti);
+      if (q["FX_IDC:USDINR"]) out.usdinr = quote(q["FX_IDC:USDINR"]);
+      return out;
+    }
+
+    async function fromCNBC() {
+      const j = await getJSON(CNBC_URL, {});
+      const by = {};
+      for (const x of (j.FormattedQuoteResult && j.FormattedQuoteResult.FormattedQuote) || []) {
+        if (x.code === 0 && num(x.last) != null) by[x.symbol] = x;
+      }
+      const busiest = (...xs) => xs.filter(Boolean).sort((a, b) => (num(b.volume) || 0) - (num(a.volume) || 0))[0];
+      const quote = (x) => x && { v: num(x.last), chg: num(x.change), pct: num(x.change_pct), open: x.curmktstatus === "REG_MKT",
+        mon: ((x.name || "").match(/\((\w{3})'\d{2}\)/) || [])[1] || null, delay: x.realTime === "false" ? 10 : 0 };
+      return { brent: quote(busiest(by["@LCO.1"], by["@LCO.2"])), wti: quote(busiest(by["@CL.1"], by["@CL.2"])),
+        usdinr: quote(by["INR="]) };
+    }
+
+    async function fromMoneycontrol() {
+      const j = await getJSON(MC_URL, {});
+      const cols = (j.header || []).map((x) => x.name);
+      for (const blk of j.dataList || []) {
+        for (const row of blk.data || []) {
+          if (row[0] !== "in;gsx") continue;
+          const o = Object.fromEntries(cols.map((c, i) => [c, row[i]]));
+          if (num(o.price) == null) break;
+          return { v: num(o.price), chg: num(o.net_change), pct: num(o.percent_change), open: o.state === "OPEN", mon: null, delay: 0 };
+        }
+      }
+      throw new Error("GIFT Nifty missing");
+    }
+
+    async function refresh() {
+      if (busy) return;
+      busy = true;
+      lastTry = Date.now();
+      if (!last || failing || Date.now() - last.at >= LIVE_FOR) paint();
+      let q = {};
+      const src = [];
+      try { q = await fromTradingView(); src.push("TradingView"); } catch { /* the backups below cover it */ }
+      const jobs = [];
+      if (!q.brent || !q.usdinr) {
+        jobs.push(fromCNBC().then((c) => {
+          if (!q.brent && c.brent) { q.brent = c.brent; q.wti = c.wti; src.push("CNBC"); }
+          if (!q.usdinr && c.usdinr) { q.usdinr = c.usdinr; if (!src.includes("CNBC")) src.push("CNBC"); }
+        }).catch(() => {}));
+      }
+      if (!q.gift) jobs.push(fromMoneycontrol().then((g) => { q.gift = g; src.push("Moneycontrol"); }).catch(() => {}));
+      await Promise.all(jobs);
+      busy = false;
+      if (q.gift || q.brent || q.usdinr) {
+        const prev = last;
+        last = { ...q, at: Date.now(), src };
+        failing = false;
+        try { localStorage.setItem(KEY, JSON.stringify(last)); } catch { /* private mode */ }
+        paint(prev);
+      } else {
+        failing = true;
+        paint();
+      }
+      schedule();
+    }
+    function schedule() {
+      clearTimeout(timer);
+      if (!document.hidden) timer = setTimeout(refresh, failing ? RETRY : EVERY);
+    }
+
+    const clock = (ms) => {
+      const d = new Date(ms);
+      const today = ist(d).ymd === ist().ymd;
+      return d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit",
+        ...(today ? { second: "2-digit" } : { day: "numeric", month: "short" }) });
+    };
+    function tile(label, x, value, chgDigits, prevX, note) {
+      if (!x) return h("div", { class: "lf" }, h("div", { class: "k", text: label }), h("div", { class: "v", text: "–" }));
+      const name = label + (x.mon ? " · " + x.mon : "");
+      const moved = prevX && prevX.v !== x.v ? (x.v > prevX.v ? " tick-up" : " tick-dn") : "";
+      const chg = x.chg == null ? signed(x.pct) : `${signed(x.chg, chgDigits(x.chg), "")} (${signed(x.pct)})`;
+      return h("div", { class: "lf", role: "group", "aria-label": `${name}: ${value(x.v)}, ${chg}, ${x.open ? "trading" : "closed"}` },
+        h("div", { class: "k" }, h("i", { class: x.open ? "on" : null }), name),
+        h("div", { class: "v" + moved, text: value(x.v) }),
+        h("div", { class: "s " + dir(x.pct), text: chg }),
+        note || null);
+    }
+    function cueLine(q) {
+      const g = q.gift, f = q.fut;
+      if (!g) return null;
+      if (q.nseOpen) return h("p", { class: "live-cue", text: "NSE is trading, so the gap cue pauses until the 3:30 pm close." });
+      if (!f || q.nseOpen == null) return null;
+      const t = ist(new Date(q.at));
+      if (t.wd !== "Sat" && t.wd !== "Sun" && t.mins >= 930 && t.mins < 945) {
+        return h("p", { class: "live-cue", text: "NSE has just closed. The gap cue starts at 3:45 pm, once its 15-minute-delayed prices settle." });
+      }
+      const gap = g.v - f.v, pct = gap / f.v * 100, pts = Math.round(Math.abs(gap));
+      const verdict = Math.abs(pct) < 0.15 ? "Flat start indicated" : gap > 0 ? "Higher start indicated" : "Lower start indicated";
+      return h("p", { class: "live-cue" }, h("b", { text: verdict + ": " }), pts === 0
+        ? `GIFT ${f.mon} is level with the Nifty ${f.mon} futures close of ${fmt(f.v, 0)}.`
+        : `GIFT ${f.mon} is ${pts} points (${fmt(Math.abs(pct), 2)}%) ${gap > 0 ? "above" : "below"} the Nifty ${f.mon} futures close of ${fmt(f.v, 0)}.`);
+    }
+    function paint(prev) {
+      const q = last;
+      const isLive = !!q && !failing && Date.now() - q.at < LIVE_FOR;
+      const anyOpen = !!q && [q.gift, q.brent, q.usdinr].some((x) => x && x.open);
+      const backup = !!q && !(q.src || []).includes("TradingView");
+      let when;
+      if (!q) when = failing ? "Live quotes aren't reachable right now. Retrying…" : "Fetching live quotes…";
+      else if (isLive) {
+        when = [h("b", { text: anyOpen ? "Live" : "Markets closed" }), ` · ${clock(q.at)}`,
+          q.brent && q.brent.delay ? ` · crude ${q.brent.delay} min late` : "", backup ? " · backup feed" : ""];
+      } else when = `Last update ${clock(q.at)}` + (busy || !lastTry ? " · updating…" : failing ? " · retrying" : "");
+      const top = h("div", { class: "live-top" },
+        h("span", { class: "beat" + (isLive && anyOpen ? (backup ? " warn" : " ok") : "") + (prev && isLive ? " fresh" : ""), "aria-hidden": "true" }),
+        h("span", { class: "when" }, when),
+        h("button", { type: "button", disabled: busy || null, onclick: () => refresh(), text: "Refresh" }));
+      const box = $("#live");
+      if (!q) { box.replaceChildren(top); return; }
+      const p = prev || {};
+      const wti = q.wti && h("div", { class: "n " + dir(q.wti.pct), text: `WTI ${fmt(q.wti.v, 2)} ${signed(q.wti.pct, 1)}` });
+      box.replaceChildren(...[top,
+        h("div", { class: "lfigs" },
+          tile("GIFT Nifty", q.gift, (v) => fmt(v, 1), (c) => Number.isInteger(c) ? 0 : 1, p.gift),
+          tile("Brent", q.brent, (v) => "$" + fmt(v, 2), () => 2, p.brent, wti),
+          tile("USD/INR", q.usdinr, (v) => fmt(v, 2), () => 2, p.usdinr)),
+        cueLine(q)].filter(Boolean));
+    }
+
+    function start() {
+      paint();
+      refresh();
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) { clearTimeout(timer); return; }
+        if (Date.now() - lastTry > 10000) refresh(); else schedule();
+      });
+      window.addEventListener("online", () => refresh());
+    }
+    return { start };
+  })();
+
   // ---------------------------------------------------------------- routing and start-up
   function route() {
     if (!DATA) return;
@@ -962,6 +1223,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
   });
   window.addEventListener("hashchange", route);
 
+  Live.start();
   fetch("data.json?v=" + Date.now(), { cache: "no-store" })
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then((d) => {
