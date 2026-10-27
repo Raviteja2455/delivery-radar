@@ -1,0 +1,101 @@
+[
+ {
+  "scenario": "1-live-390-light",
+  "width": 390,
+  "dark": false,
+  "blocked": [],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   },
+   {
+    "host": "scanner.tradingview.com",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   }
+  ],
+  "errors": [],
+  "seconds_to_quotes": 0.5,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live · 7:09:02 pm · crude 10 min late\nRefresh\nGIFT Nifty · Nov\n22,732.5\n−129.5 (−0.57%)\nBrent · Jan\n$110.26\n−0.48 (−0.43%)\nWTI 101.27 −0.5%\nUSD/INR\n95.11\n−0.07 (−0.07%)\n\nLower start indicated: GIFT Nov is 75 points (0.33%) below the Nifty Nov futures close of 22,808.",
+  "clipped": [],
+  "page_hscroll": false,
+  "after_23s": "Live · 7:09:22 pm · crude 10 min late",
+  "refreshed": true,
+  "tv_calls": 2
+ },
+ {
+  "scenario": "2-live-390-dark",
+  "width": 390,
+  "dark": true,
+  "blocked": [],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   }
+  ],
+  "errors": [],
+  "seconds_to_quotes": 0.3,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live · 7:09:29 pm · crude 10 min late\nRefresh\nGIFT Nifty · Nov\n22,729.5\n−132.5 (−0.58%)\nBrent · Jan\n$110.26\n−0.48 (−0.43%)\nWTI 101.27 −0.5%\nUSD/INR\n95.11\n−0.07 (−0.07%)\n\nLower start indicated: GIFT Nov is 78 points (0.34%) below the Nifty Nov futures close of 22,808.",
+  "clipped": [],
+  "page_hscroll": false,
+  "tv_calls": 1
+ },
+ {
+  "scenario": "3-live-360",
+  "width": 360,
+  "dark": false,
+  "blocked": [],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   }
+  ],
+  "errors": [],
+  "seconds_to_quotes": 0.4,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live · 7:09:32 pm · crude 10 min late\nRefresh\nGIFT Nifty · Nov\n22,729.5\n−132.5 (−0.58%)\nBrent · Jan\n$110.29\n−0.45 (−0.41%)\nWTI 101.27 −0.5%\nUSD/INR\n95.11\n−0.07 (−0.07%)\n\nLower start indicated: GIFT Nov is 78 points (0.34%) below the Nifty Nov futures close of 22,808.",
+  "clipped": [],
+  "page_hscroll": false,
+  "tv_calls": 1
+ },
+ {
+  "scenario": "4-live-412",
+  "width": 412,
+  "dark": false,
+  "blocked": [],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   }
+  ],
+  "errors": [],
+  "seconds_to_quotes": 0.3,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live · 7:09:35 pm · crude 10 min late\nRefresh\nGIFT Nifty · Nov\n22,729.5\n−132.5 (−0.58%)\nBrent · Jan\n$110.26\n−0.48 (−0.43%)\nWTI 101.27 −0.5%\nUSD/INR\n95.11\n−0.07 (−0.07%)\n\nLower start indicated: GIFT Nov is 78 points (0.34%) below the Nifty Nov futures close of 22,808.",
+  "clipped": [],
+  "page_hscroll": false,
+  "tv_calls": 1
+ }
+]
