@@ -1,0 +1,1245 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Delivery Radar</title>
+<meta name="description" content="Nifty 50 delivery percentage, volume, futures buildup and bulk/block deals, refreshed every weekday night from NSE.">
+<meta name="theme-color" content="#F3F5F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1A2B" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2315233B'/%3E%3Crect x='6' y='13' width='20' height='6' rx='1.5' fill='%23D6DFF5'/%3E%3Crect x='6' y='13' width='13' height='6' rx='1.5' fill='%237EA2FF'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #F3F5F8; --sheet: #FFFFFF; --ink: #15233B; --ink-2: #56677F; --rule: #DCE2EA;
+  --deliv: #2A55C4; --deliv-soft: #D3DCF2; --muted-bar: #B7C1D1;
+  --up: #12805C; --down: #C23B33; --signal: #C98500;
+  --red: #C23B33; --amber: #C98500; --green: #12805C;
+  --font: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-c: "Barlow Semi Condensed", "Barlow", "Arial Narrow", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0F1A2B; --sheet: #15243A; --ink: #E7EDF6; --ink-2: #98A8BF; --rule: #263752;
+    --deliv: #7EA2FF; --deliv-soft: #2A3D63; --muted-bar: #4A5B78;
+    --up: #45C08F; --down: #F06A5F; --signal: #F2B544;
+    --red: #F06A5F; --amber: #F2B544; --green: #45C08F;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 15px/1.45 var(--font); }
+button, input, select { font: inherit; color: inherit; }
+.num, .px, .fig .v, td, .snap .v { font-variant-numeric: tabular-nums; }
+.wrap { max-width: 760px; margin: 0 auto; padding: max(14px, env(safe-area-inset-top)) 16px 56px; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 3px solid var(--deliv); outline-offset: 2px; }
+
+/* header */
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+h1 { font: 700 30px/1 var(--font-c); letter-spacing: -0.015em; margin: 10px 0 6px; }
+.asof { color: var(--ink-2); margin: 0; font-size: 14px; }
+.help { margin: 10px 0 0; font-size: 14px; color: var(--ink-2); }
+.help summary { cursor: pointer; color: var(--deliv); font-weight: 500; width: max-content; }
+.help-body { background: var(--sheet); border-radius: 10px; padding: 12px 14px; margin-top: 8px; color: var(--ink); }
+.help-body p { margin: 0 0 8px; }
+.help-body ol { margin: 0 0 8px; padding-left: 20px; }
+.legend-bar { width: 180px; margin: 6px 0 10px; }
+
+/* regime */
+.regime { margin: 16px 0 12px; background: var(--sheet); border-left: 6px solid var(--amber); border-radius: 4px 12px 12px 4px; padding: 12px 14px 14px; }
+.regime[data-r="red"] { border-left-color: var(--red); }
+.regime[data-r="green"] { border-left-color: var(--green); }
+.verdict { font: 600 19px/1.2 var(--font-c); margin: 0; }
+.regime[data-r="red"] .verdict b { color: var(--red); }
+.regime[data-r="amber"] .verdict b { color: var(--amber); }
+.regime[data-r="green"] .verdict b { color: var(--green); }
+.why { margin: 4px 0 0; padding: 0; list-style: none; color: var(--ink-2); font-size: 14px; }
+.figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 10px; margin-top: 12px; }
+.fig .k { font-size: 12.5px; color: var(--ink-2); }
+.fig .v { font: 600 17px/1.15 var(--font-c); white-space: nowrap; }
+.fig .s { font-size: 12.5px; }
+.market { margin: 0 0 14px; color: var(--ink-2); font-size: 14px; }
+.market b { color: var(--ink); font-weight: 500; }
+
+/* controls */
+.controls { display: flex; gap: 8px; margin-bottom: 10px; }
+.controls input { flex: 1 1 auto; min-width: 0; border: 1px solid var(--rule); background: var(--sheet); border-radius: 10px; padding: 9px 12px; }
+.controls select { flex: 0 0 auto; border: 1px solid var(--rule); background: var(--sheet); border-radius: 10px; padding: 9px 10px; max-width: 48%; }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 12px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: 0 0 auto; border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 6px 12px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.chip .n { color: var(--ink-2); margin-left: 4px; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chip[aria-pressed="true"] .n { color: inherit; opacity: .75; }
+
+/* list */
+.list { background: var(--sheet); border-radius: 12px; overflow: hidden; }
+.row { display: block; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--rule); padding: 12px 14px 11px; cursor: pointer; }
+.row:first-child { border-top: 0; }
+.row:active { background: var(--paper); }
+.r1 { display: flex; align-items: baseline; gap: 8px; }
+.sym { font: 600 18px/1.15 var(--font-c); letter-spacing: .005em; }
+.star { color: var(--signal); font-size: 13px; }
+.px { margin-left: auto; font: 500 16px/1.15 var(--font-c); }
+.chg { font: 500 15px/1.15 var(--font-c); min-width: 56px; text-align: right; }
+.up { color: var(--up); } .down { color: var(--down); }
+.bar { position: relative; height: 12px; margin: 9px 0 7px; }
+.bar .avg { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 1.5px dashed var(--ink-2); z-index: 1; opacity: .7; }
+.bar .vol { position: absolute; left: 0; top: 0; bottom: 0; background: var(--deliv-soft); border-radius: 3px; }
+.bar .del { position: absolute; left: 0; top: 0; bottom: 0; background: var(--deliv); border-radius: 3px 0 0 3px; }
+.bar .tick { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); border-radius: 1px; }
+.r3 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13.5px; color: var(--ink-2); }
+.r3 .dl { color: var(--ink); font-weight: 500; }
+.tag { border-radius: 5px; padding: 1px 6px; font-size: 12.5px; font-weight: 500; background: var(--paper); color: var(--ink-2); }
+.tag.lb { color: var(--up); } .tag.sb { color: var(--down); }
+.tag.deal { color: var(--deliv); }
+.score { display: inline-flex; align-items: center; gap: 3px; margin-left: auto; }
+.score i { width: 8px; height: 8px; border-radius: 2px; background: var(--rule); }
+.score i.on { background: var(--signal); }
+.score span { margin-left: 4px; font: 600 14px var(--font-c); color: var(--ink); }
+.empty { padding: 28px 16px; text-align: center; color: var(--ink-2); }
+.foot { margin-top: 22px; font-size: 12.5px; color: var(--ink-2); }
+.foot p { margin: 0 0 6px; }
+
+/* detail */
+.dtop { display: flex; justify-content: space-between; align-items: center; margin: 4px 0 6px; }
+.back, .watch { border: 0; background: none; padding: 8px 0; cursor: pointer; font-weight: 500; color: var(--deliv); font-size: 15px; }
+.watch[aria-pressed="true"] { color: var(--signal); }
+.dsym { font: 700 34px/1 var(--font-c); margin: 6px 0 4px; letter-spacing: -0.01em; }
+.dname { margin: 0; color: var(--ink-2); font-size: 14px; }
+.dpx { margin: 8px 0 0; font: 600 22px/1.2 var(--font-c); }
+.dpx .chg { font-size: 18px; margin-left: 6px; }
+.card { background: var(--sheet); border-radius: 12px; padding: 14px; margin-top: 14px; }
+.card h3 { font: 600 17px/1.2 var(--font-c); margin: 0 0 10px; }
+details.card > summary { cursor: pointer; font: 600 17px/1.2 var(--font-c); }
+details.card[open] > summary { margin-bottom: 12px; }
+.sigs { list-style: none; margin: 0; padding: 0; }
+.sigs li { display: grid; grid-template-columns: 22px 1fr; gap: 2px 8px; padding: 7px 0; border-top: 1px solid var(--rule); }
+.sigs li:first-child { border-top: 0; padding-top: 0; }
+.sigs .ic { font-weight: 700; text-align: center; }
+.sigs .ok .ic { color: var(--signal); } .sigs .no .ic { color: var(--muted-bar); }
+.sigs .lab { font-size: 14.5px; }
+.sigs .val { grid-column: 2; font-size: 13px; color: var(--ink-2); }
+.scorehead { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
+.scorehead .big { font: 700 26px/1 var(--font-c); }
+.snap { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+.snap .k { font-size: 12.5px; color: var(--ink-2); }
+.snap .v { font: 600 18px/1.2 var(--font-c); }
+.snap .s { font-size: 12.5px; color: var(--ink-2); }
+.chart svg { display: block; overflow: visible; }
+.chart .lbl { font: 500 11px var(--font); fill: var(--ink-2); }
+.chart .price { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+.chart .avg5 { fill: none; stroke: var(--signal); stroke-width: 1.6; }
+.chart .upb { fill: var(--deliv); } .chart .dnb { fill: var(--muted-bar); }
+.chart .grid { stroke: var(--rule); stroke-width: 1; }
+.chart-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--ink-2); margin-top: 8px; }
+.chart-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.tbl { overflow-x: auto; margin: 0 -14px; padding: 0 14px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th { font: 500 12px var(--font); color: var(--ink-2); text-align: right; padding: 0 0 6px 6px; white-space: nowrap; }
+td { text-align: right; padding: 6px 0 6px 6px; border-top: 1px solid var(--rule); white-space: nowrap; font-family: var(--font-c); font-size: 14px; }
+th:first-child, td:first-child { text-align: left; padding-left: 0; }
+td.hi { color: var(--deliv); font-weight: 600; }
+.deals { list-style: none; margin: 0; padding: 0; }
+.deals li { padding: 8px 0; border-top: 1px solid var(--rule); font-size: 14px; }
+.deals li:first-child { border-top: 0; padding-top: 0; }
+.deals .who { color: var(--ink-2); font-size: 13px; overflow-wrap: anywhere; }
+.note { font-size: 13px; color: var(--ink-2); margin: 8px 0 0; }
+
+/* tabs */
+.tabs { display: flex; gap: 4px; background: var(--sheet); border-radius: 12px; padding: 4px; margin: 14px 0 0; }
+.tab { flex: 1 1 0; border: 0; background: none; border-radius: 9px; padding: 8px 10px; font: 600 16px/1.2 var(--font-c); color: var(--ink-2); cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.tab .n { font-weight: 500; margin-left: 5px; color: var(--signal); }
+.tab[aria-selected="true"] .n { color: inherit; opacity: .8; }
+
+/* MTF */
+.btn { border: 0; border-radius: 10px; padding: 9px 14px; font-weight: 600; cursor: pointer; background: var(--ink); color: var(--paper); }
+.btn.ghost { background: none; color: var(--deliv); border: 1px solid var(--rule); }
+.btn.small { padding: 6px 11px; font-size: 14px; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.cand { background: var(--sheet); border-radius: 12px; padding: 14px; margin-top: 12px; border-left: 6px solid var(--signal); }
+.cand h3 { margin: 0; font: 700 24px/1.1 var(--font-c); display: flex; align-items: baseline; gap: 8px; }
+.cand h3 .px { margin-left: auto; font: 500 16px var(--font-c); }
+.cand .sub { color: var(--ink-2); font-size: 13.5px; margin: 2px 0 6px; }
+.plan { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin: 10px 0 6px; }
+.plan .k { font-size: 12.5px; color: var(--ink-2); }
+.plan .v { font: 600 17px/1.2 var(--font-c); font-variant-numeric: tabular-nums; }
+.plan .s { font-size: 12.5px; color: var(--ink-2); }
+.checks { list-style: none; margin: 8px 0 0; padding: 0; font-size: 14px; }
+.checks li { display: grid; grid-template-columns: 20px 1fr; gap: 0 6px; padding: 6px 0; border-top: 1px solid var(--rule); }
+.checks .ic { font-weight: 700; text-align: center; }
+.checks .ok .ic { color: var(--up); } .checks .no .ic { color: var(--down); }
+.checks .val { grid-column: 2; color: var(--ink-2); font-size: 12.5px; overflow-wrap: anywhere; }
+.near-row { display: flex; gap: 12px; align-items: baseline; }
+.near-row .miss { color: var(--ink-2); font-size: 13.5px; }
+.pos { padding: 12px 0; border-top: 1px solid var(--rule); }
+.pos:first-of-type { border-top: 0; padding-top: 2px; }
+.pos .r1 { align-items: center; }
+.act { border-radius: 6px; padding: 1px 8px; font-size: 13px; font-weight: 600; }
+.act.hold { background: var(--paper); color: var(--up); }
+.act.exit { background: var(--down); color: #fff; }
+.pos .line { font-size: 13.5px; color: var(--ink-2); margin: 4px 0 0; }
+.pos .line b { color: var(--ink); font-weight: 600; }
+.form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink-2); min-width: 0; }
+.form input, .form select, .form textarea { border: 1px solid var(--rule); background: var(--paper); border-radius: 8px; padding: 8px 10px; font-size: 15px; color: var(--ink); width: 100%; min-width: 0; }
+.form .wide, .form .actions { grid-column: 1 / -1; }
+.form .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.rules { margin: 0; padding-left: 18px; font-size: 14px; }
+.rules li { margin-bottom: 8px; }
+.tag.mtf { color: var(--signal); }
+
+/* live cues */
+.live { background: var(--sheet); border-radius: 12px; padding: 9px 14px 12px; margin: 12px 0 0; }
+.live-top { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); min-height: 28px; }
+.live-top .beat { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--muted-bar); }
+.live-top .beat.ok { background: var(--up); }
+.live-top .beat.warn { background: var(--amber); }
+.live-top .when { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-top .when b { color: var(--ink); font-weight: 500; }
+.live-top button { flex: 0 0 auto; border: 0; background: none; color: var(--deliv); font: 500 14px var(--font); padding: 4px 0 4px 8px; cursor: pointer; }
+.live-top button:disabled { color: var(--ink-2); cursor: default; }
+.lfigs { display: grid; grid-template-columns: repeat(3, minmax(0, max-content)); justify-content: space-between; gap: 6px 12px; margin-top: 6px; }
+.lf { min-width: 0; }
+.lf .k { font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf .k i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--muted-bar); margin-right: 5px; vertical-align: 1.5px; }
+.lf .k i.on { background: var(--up); }
+.lf .v { font: 600 18px/1.2 var(--font-c); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lf .s, .lf .n { font: 500 13.5px/1.3 var(--font-c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.lf .n { color: var(--ink-2); font-weight: 400; }
+.live-cue { margin: 10px 0 0; padding-top: 9px; border-top: 1px solid var(--rule); font-size: 13.5px; color: var(--ink-2); }
+.live-cue b { color: var(--ink); font-weight: 600; }
+.live-msg { margin: 6px 0 0; font-size: 13.5px; color: var(--ink-2); }
+
+@media (min-width: 560px) {
+  .snap { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 370px) {
+  .figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  #detail:not([hidden]), #mtf-view:not([hidden]) { animation: rise .18s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .lf .v.tick-up { animation: tickup 1.6s ease-out; }
+  .lf .v.tick-dn { animation: tickdn 1.6s ease-out; }
+  @keyframes tickup { from { color: var(--up); } }
+  @keyframes tickdn { from { color: var(--down); } }
+  .live-top .beat.ok.fresh { animation: beat 1.2s ease-out; }
+  @keyframes beat { from { box-shadow: 0 0 0 0 var(--up); } to { box-shadow: 0 0 0 7px transparent; } }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header id="apphead">
+    <h1>Delivery Radar</h1>
+    <p class="asof" id="asof">Loading tonight's NSE data…</p>
+    <nav class="tabs" aria-label="Views">
+      <button class="tab" id="tab-stocks" type="button" aria-selected="true">Stocks</button>
+      <button class="tab" id="tab-mtf" type="button" aria-selected="false">MTF<span class="n" id="mtf-count"></span></button>
+    </nav>
+    <section class="live" id="live" aria-label="Live market cues">
+      <div class="live-top"><span class="beat" aria-hidden="true"></span><span class="when">Fetching live quotes…</span></div>
+    </section>
+  </header>
+  <main id="list-view">
+    <details class="help">
+      <summary>How to read this</summary>
+      <div class="help-body">
+        <p>Each stock's bar shows the day in one line.</p>
+        <div class="legend-bar"><div class="bar" aria-hidden="true"><span class="vol" style="width:72%"></span><span class="del" style="width:43%"></span><span class="avg" style="left:40%"></span><span class="tick" style="left:calc(30% - 1px)"></span></div></div>
+        <p>The bar's length is today's volume against its 20-day average; the dashed line marks a normal day (1×) and the bar is full at 2.5×. The dark part is the share that was delivered. The black tick marks the 5-day average delivery %. A long, mostly dark bar on an up day is the footprint of real buying.</p>
+        <p>The score counts six signals:</p>
+        <ol id="sig-help"></ol>
+        <p>The live strip shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR, refreshed every 20 seconds while the app is open. A green dot means that market is trading now. GIFT Nifty is real time; crude runs 10 minutes behind. Each uses its most-traded contract, named after the label. Outside NSE hours the line under the strip compares GIFT Nifty with the close of the Nifty futures for the same month, which is the usual read on how the next session will open.</p>
+        <p>The band at the top applies your MTF regime rule: red means cash only, amber allows up to 1.5×, green up to 2×. The MTF tab runs the full entry, sizing and exit rules on every stock.</p>
+      </div>
+    </details>
+
+    <section class="regime" id="regime" hidden aria-live="polite"></section>
+    <p class="market" id="market"></p>
+
+    <div class="controls" id="controls" hidden>
+      <input id="q" type="search" placeholder="Search stock" autocomplete="off" aria-label="Search stock">
+      <select id="sort" aria-label="Sort by"></select>
+    </div>
+    <div class="chips" id="chips" role="toolbar" aria-label="Filter"></div>
+    <div class="list" id="list"></div>
+
+    <footer class="foot">
+      <p>Source: NSE end-of-day files (security-wise delivery, F&amp;O bhavcopy, bulk and block deals, index closes and FII/DII figures). Updated every weekday night.</p>
+      <p>Live strip: TradingView quotes (crude delayed 10 minutes), with CNBC and Moneycontrol as backups.</p>
+      <p>For information only. Not investment advice.</p>
+    </footer>
+  </main>
+  <main id="mtf-view" hidden></main>
+  <main id="detail" hidden></main>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (sel) => document.querySelector(sel);
+  const h = (tag, props, ...kids) => {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v == null || v === false) continue;
+      if (k === "class") el.className = v;
+      else if (k === "text") el.textContent = v;
+      else if (k === "style") el.style.cssText = v;
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat()) {
+      if (kid == null || kid === false) continue;
+      el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+    }
+    return el;
+  };
+  const NS = "http://www.w3.org/2000/svg";
+  const sv = (tag, attrs) => {
+    const el = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+    return el;
+  };
+
+  const MINUS = "−";
+  const fmt = (x, d = 2) => x == null ? "–" : (x < 0 ? MINUS : "") +
+    Math.abs(x).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const signed = (x, d = 2, unit = "%") => {
+    if (x == null) return "–";
+    const r = Number(x.toFixed(d));
+    return (r > 0 ? "+" : r < 0 ? MINUS : "") + Math.abs(r).toFixed(d) + unit;
+  };
+  const qty = (x) => {
+    if (x == null) return "–";
+    const a = Math.abs(x), sign = x < 0 ? MINUS : "";
+    if (a >= 1e7) return sign + (a / 1e7).toFixed(a >= 1e9 ? 0 : 2) + " Cr";
+    if (a >= 1e5) return sign + (a / 1e5).toFixed(a >= 1e6 ? 1 : 2) + " L";
+    return sign + Math.round(a).toLocaleString("en-IN");
+  };
+  const rupees = (x, d = 2) => x == null ? "–" : (x < 0 ? MINUS : "") + "₹" + fmt(Math.abs(x), d);
+  const rupeesShort = (x) => x == null ? "–" : Math.abs(x) >= 1e5 ? "₹" + qty(x) : rupees(x, 0);
+  const price = (x) => x == null ? "–" : fmt(x, Math.abs(x) >= 1000 ? 0 : 2);
+  const times = (x) => x == null ? "–" : x.toFixed(2) + "×";
+  const dir = (x) => { const r = x == null ? 0 : Math.round(x * 10) / 10; return r > 0 ? "up" : r < 0 ? "down" : ""; };
+  const dt = (iso, opts) => new Date(iso + "T00:00:00").toLocaleDateString("en-IN", opts);
+  const shortDate = (iso) => dt(iso, { day: "numeric", month: "short" });
+
+  let DATA = null;
+  const state = { filter: "all", sort: "score", q: "" };
+  let listScroll = 0, cameFromList = false;
+  const watch = new Set((() => { try { return JSON.parse(localStorage.getItem("dr-watch") || "[]"); } catch { return []; } })());
+  const saveWatch = () => { try { localStorage.setItem("dr-watch", JSON.stringify([...watch])); } catch { /* private mode */ } };
+
+  const FILTERS = [
+    ["all", "All", () => true],
+    ["mtf", "MTF ready", (s) => evaluate(s).status === "ready"],
+    ["score", "Score 4+", (s) => s.score >= 4],
+    ["spike", "Delivery spike", (s) => (s.dqx ?? 0) >= 1.5],
+    ["long", "Long buildup", (s) => s.bu === "Long buildup"],
+    ["short", "Short buildup", (s) => s.bu === "Short buildup"],
+    ["deals", "Deals", (s) => !!s.deal],
+    ["watch", "★ Watchlist", (s) => watch.has(s.s)],
+  ];
+  const desc = (k) => (a, b) => (b[k] ?? -Infinity) - (a[k] ?? -Infinity);
+  const SORTS = {
+    score: ["Score", (a, b) => b.score - a.score || (b.dpd ?? -99) - (a.dpd ?? -99)],
+    dp: ["Delivery %", desc("dp")],
+    dpd: ["Delivery vs 20-day avg", desc("dpd")],
+    dqx: ["Delivered qty vs 5-day avg", desc("dqx")],
+    vx: ["Volume vs 20-day avg", desc("vx")],
+    chg: ["Day's gain", desc("chg")],
+    loss: ["Day's loss", (a, b) => (a.chg ?? Infinity) - (b.chg ?? Infinity)],
+    name: ["Name", (a, b) => a.s.localeCompare(b.s)],
+  };
+  const BU_CLASS = { "Long buildup": "lb", "Short covering": "lb", "Short buildup": "sb", "Long unwinding": "sb" };
+
+  // ---------------------------------------------------------------- list view
+  function deliveryBar(st) {
+    const L = Math.max(0.06, Math.min((st.vx ?? 1) / 2.5, 1));
+    const bar = h("div", { class: "bar", role: "img",
+      "aria-label": `Volume ${times(st.vx)} its 20-day average, ${fmt(st.dp, 1)}% delivered, 5-day average ${fmt(st.dp5, 1)}%` });
+    bar.append(h("span", { class: "vol", style: `width:${(L * 100).toFixed(2)}%` }));
+    bar.append(h("span", { class: "del", style: `width:${(L * (st.dp ?? 0)).toFixed(2)}%` }));
+    bar.append(h("span", { class: "avg", style: "left:40%" }));
+    if (st.dp5 != null) bar.append(h("span", { class: "tick", style: `left:calc(${(L * st.dp5).toFixed(2)}% - 1px)` }));
+    return bar;
+  }
+  function scoreDots(st) {
+    return h("span", { class: "score", "aria-label": `Score ${st.score} of 6` },
+      st.sig.map((on) => h("i", { class: on ? "on" : null })), h("span", { text: st.score }));
+  }
+  function buTag(st) {
+    if (!st.bu || st.bu === "Neutral") return null;
+    const extra = st.oic != null && st.bu !== "Expiry day" ? ` ${signed(st.oic, 1)}` : "";
+    return h("span", { class: "tag " + (BU_CLASS[st.bu] || ""), text: st.bu + extra });
+  }
+  function dealTag(st) {
+    if (!st.deal) return null;
+    const kind = st.deal.k === "BLOCK" ? "Block" : "Bulk";
+    return h("span", { class: "tag deal", text: `${kind} ${rupees(st.deal.p)} ${st.deal.held ? "held" : "lost"}` });
+  }
+  function row(st) {
+    const open = () => {
+      listScroll = window.scrollY; cameFromList = true;
+      location.hash = "s=" + encodeURIComponent(st.s);
+    };
+    return h("button", { class: "row", type: "button", onclick: open },
+      h("div", { class: "r1" },
+        h("span", { class: "sym", text: st.s }),
+        watch.has(st.s) ? h("span", { class: "star", text: "★", "aria-label": "On your watchlist" }) : null,
+        h("span", { class: "px", text: rupees(st.c) }),
+        h("span", { class: "chg " + dir(st.chg), text: signed(st.chg) })),
+      deliveryBar(st),
+      h("div", { class: "r3" },
+        h("span", { class: "dl", text: `Delivered ${fmt(st.dp, 1)}%` }),
+        h("span", { text: `5-day ${fmt(st.dp5, 1)}%` }),
+        h("span", { text: `Volume ${times(st.vx)}` }),
+        buTag(st), dealTag(st),
+        evaluate(st).status === "ready" ? h("span", { class: "tag mtf", text: "MTF ready" }) : null,
+        scoreDots(st)));
+  }
+  function renderChips() {
+    const box = $("#chips");
+    box.replaceChildren(...FILTERS.map(([key, label, fn]) => {
+      const n = DATA.stocks.filter(fn).length;
+      return h("button", { class: "chip", type: "button", "aria-pressed": String(state.filter === key),
+        onclick: () => { state.filter = key; renderChips(); renderRows(); } },
+        label, h("span", { class: "n", text: n }));
+    }));
+  }
+  function renderRows() {
+    const f = FILTERS.find(([k]) => k === state.filter)[2];
+    const q = state.q.trim().toLowerCase();
+    const rows = DATA.stocks.filter(f)
+      .filter((s) => !q || s.s.toLowerCase().includes(q) || s.n.toLowerCase().includes(q))
+      .sort(SORTS[state.sort][1]);
+    const list = $("#list");
+    if (!rows.length) {
+      const msg = state.filter === "watch" && !watch.size
+        ? "Your watchlist is empty. Open a stock and tap Watch to add it."
+        : "No stocks match this filter today.";
+      list.replaceChildren(h("p", { class: "empty", text: msg }));
+      return;
+    }
+    list.replaceChildren(...rows.map(row));
+  }
+  function renderHeader() {
+    const m = DATA.market;
+    const when = DATA.last_update ? new Date(DATA.last_update) : null;
+    $("#asof").textContent = `NSE data for ${dt(DATA.asof, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}.` +
+      (when ? ` Refreshed ${when.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" })} IST.` : "");
+    $("#sig-help").replaceChildren(...DATA.signals.map((t) => h("li", { text: t })));
+
+    const verdicts = { red: "cash only, no MTF", amber: "MTF up to 1.5×", green: "MTF up to 2×" };
+    const label = { red: "Red", amber: "Amber", green: "Green" }[m.regime];
+    const reg = $("#regime");
+    reg.dataset.r = m.regime;
+    const fiiFig = m.fii5 != null
+      ? fig("FII, 5 days", fmt(m.fii5, 0), null, "₹ crore")
+      : fig("FII today", m.fii != null ? fmt(m.fii, 0) : "n/a", null, m.fii != null ? "₹ crore" : null);
+    reg.replaceChildren(
+      h("p", { class: "verdict" }, h("b", { text: label }), `: ${verdicts[m.regime]}`),
+      h("ul", { class: "why" }, m.reasons.map((r) => h("li", { text: r }))),
+      h("div", { class: "figs" },
+        fig("Nifty 50", fmt(m.nifty, 0), m.nifty_chg),
+        fig("vs 50-DMA", m.dma50 ? signed((m.nifty / m.dma50 - 1) * 100, 1) : "n/a", null),
+        fig("India VIX", fmt(m.vix, 2), m.vix_chg),
+        fiiFig));
+    reg.hidden = false;
+
+    const fo = DATA.have.fo ? "" : " Today's F&O file isn't in yet, so futures buildup is blank.";
+    $("#market").replaceChildren(
+      `Average delivery across these ${DATA.stocks.length} stocks: `, h("b", { text: `${fmt(m.dp, 1)}% today` }),
+      `, against ${fmt(m.dpp, 1)}% over the previous 20 sessions. ${m.adv} rose and ${m.dec} fell; `,
+      h("b", { text: `${m.score4} score 4 or more` }), "." + fo);
+  }
+  function fig(k, v, chg, note) {
+    return h("div", { class: "fig" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }),
+      chg != null ? h("div", { class: "s " + dir(chg), text: signed(chg) }) : note ? h("div", { class: "s", text: note }) : null);
+  }
+  function renderControls() {
+    const sel = $("#sort");
+    sel.replaceChildren(...Object.entries(SORTS).map(([k, [label]]) => h("option", { value: k, text: "Sort: " + label })));
+    sel.value = state.sort;
+    sel.addEventListener("change", () => { state.sort = sel.value; renderRows(); });
+    $("#q").addEventListener("input", (e) => { state.q = e.target.value; renderRows(); });
+    $("#controls").hidden = false;
+  }
+
+  // ---------------------------------------------------------------- detail view
+  function showDetail(sym) {
+    const st = DATA.stocks.find((x) => x.s === sym);
+    if (!st) { location.hash = ""; return; }
+    const D = $("#detail");
+    const watchBtn = h("button", { class: "watch", type: "button", "aria-pressed": String(watch.has(st.s)),
+      text: watch.has(st.s) ? "★ Watching" : "☆ Watch",
+      onclick: (e) => {
+        watch.has(st.s) ? watch.delete(st.s) : watch.add(st.s);
+        saveWatch();
+        e.currentTarget.setAttribute("aria-pressed", String(watch.has(st.s)));
+        e.currentTarget.textContent = watch.has(st.s) ? "★ Watching" : "☆ Watch";
+      } });
+    D.replaceChildren(
+      h("div", { class: "dtop" },
+        h("button", { class: "back", type: "button", text: "‹ All stocks",
+          onclick: () => { if (cameFromList) history.back(); else location.hash = ""; } }),
+        watchBtn),
+      h("h2", { class: "dsym", text: st.s }),
+      h("p", { class: "dname", text: [st.n, st.ind].filter(Boolean).join(", ") }),
+      h("p", { class: "dpx" }, h("span", { text: rupees(st.c) }), h("span", { class: "chg " + dir(st.chg), text: signed(st.chg) })),
+      signalsCard(st), mtfCard(st), snapshotCard(st), chartCard(st), deliverablesCard(st), futuresCard(st), dealsCard(st));
+    $("#list-view").hidden = true;
+    $("#mtf-view").hidden = true;
+    D.hidden = false;
+    window.scrollTo(0, 0);
+    drawChart(st);
+  }
+  function signalsCard(st) {
+    const vals = [
+      `${fmt(st.dp, 1)}% today vs ${fmt(st.dpp, 1)}% average of the previous 20 sessions`,
+      `${st.acc} up days and ${st.dist} down days with above-average delivery`,
+      st.bu ? `${st.bu}${st.oic != null && st.bu !== "Expiry day" ? `, open interest ${signed(st.oic, 1)}` : ""}` : "No futures data for this day",
+      `${rupees(st.c)} vs ${rupees(st.sma20)}`,
+      `${rupees(st.c)} vs ${rupees(st.hi10)}`,
+      `${times(st.dqx)} (${qty(st.dq)} vs ${qty(st.dq5)} 5-day average)`,
+    ];
+    return h("section", { class: "card" },
+      h("div", { class: "scorehead" }, h("span", { class: "big", text: `${st.score} of 6` }), scoreDots(st)),
+      h("ul", { class: "sigs" }, DATA.signals.map((label, i) =>
+        h("li", { class: st.sig[i] ? "ok" : "no" },
+          h("span", { class: "ic", text: st.sig[i] ? "✓" : "×", "aria-label": st.sig[i] ? "Met" : "Not met" }),
+          h("span", { class: "lab", text: label }),
+          h("span", { class: "val", text: vals[i] })))));
+  }
+  function snapshotCard(st) {
+    const cell = (k, v, s) => h("div", {}, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), s ? h("div", { class: "s", text: s }) : null);
+    return h("section", { class: "card" }, h("h3", { text: "Delivery" }),
+      h("div", { class: "snap" },
+        cell("Delivered today", `${fmt(st.dp, 2)}%`, qty(st.dq) + " shares"),
+        cell("5-day average", `${fmt(st.dp5, 2)}%`, qty(st.dq5) + " shares a day"),
+        cell("10-day average", `${fmt(st.dp10, 2)}%`),
+        cell("20-day average", `${fmt(st.dp20, 2)}%`),
+        cell("Volume", qty(st.v), `${times(st.vx)} its 20-day average`),
+        cell("Turnover", st.to != null ? `₹${fmt(st.to, 0)} cr` : "–", `${qty(st.nt)} trades`),
+        cell("Average trade", rupeesShort(st.ats), `${times(st.atsx)} its 20-day average`),
+        cell("Delivered qty", times(st.dqx), "vs its 5-day average")));
+  }
+  function chartCard(st) {
+    return h("section", { class: "card" },
+      h("h3", { text: `Price and delivery, last ${DATA.dates.length} sessions` }),
+      h("div", { class: "chart", id: "chart" }),
+      h("div", { class: "chart-key" },
+        h("span", {}, h("i", { style: "background:var(--ink)" }), "Close"),
+        h("span", {}, h("i", { style: "background:var(--deliv)" }), "Delivery % on up days"),
+        h("span", {}, h("i", { style: "background:var(--muted-bar)" }), "on down days"),
+        h("span", {}, h("i", { style: "background:var(--signal)" }), "5-day average")));
+  }
+  function drawChart(st) {
+    const box = $("#chart");
+    if (!box) return;
+    const W = Math.max(260, box.clientWidth), H = 210, L = 44, R = 6, T = 8, B = 20;
+    const n = DATA.dates.length, x = (i) => L + (W - L - R) * (n === 1 ? 0.5 : i / (n - 1));
+    const prices = st.h.c.filter((v) => v != null);
+    const lo = Math.min(...prices), hi = Math.max(...prices), span = (hi - lo) || 1;
+    const pTop = T, pBot = T + (H - T - B) * 0.52;
+    const dTop = pBot + 14, dBot = H - B;
+    const py = (v) => pBot - (v - lo) / span * (pBot - pTop);
+    const dy = (v) => dBot - v / 100 * (dBot - dTop);
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, role: "img",
+      "aria-label": `${st.s} closing price and delivery percentage over ${n} sessions` });
+    for (const v of [0, 50, 100]) svg.append(sv("line", { class: "grid", x1: L, x2: W - R, y1: dy(v), y2: dy(v) }));
+    const bw = Math.max(2, (W - L - R) / n * 0.6);
+    st.h.dp.forEach((v, i) => {
+      if (v == null) return;
+      svg.append(sv("rect", { x: (x(i) - bw / 2).toFixed(1), y: dy(v).toFixed(1), width: bw.toFixed(1),
+        height: (dBot - dy(v)).toFixed(1), rx: 1, class: (st.h.chg[i] ?? 0) >= 0 ? "upb" : "dnb" }));
+    });
+    const path = (vals, f) => vals.map((v, i) => v == null ? null : `${x(i).toFixed(1)},${f(v).toFixed(1)}`)
+      .filter(Boolean).map((p, i) => (i ? "L" : "M") + p).join("");
+    svg.append(sv("path", { class: "avg5", d: path(st.h.dp5, dy) }));
+    svg.append(sv("path", { class: "price", d: path(st.h.c, py) }));
+    const text = (t, xx, yy, anchor = "end") => { const el = sv("text", { class: "lbl", x: xx, y: yy, "text-anchor": anchor }); el.textContent = t; svg.append(el); };
+    text(fmt(hi, hi >= 1000 ? 0 : 1), L - 6, pTop + 8);
+    text(fmt(lo, lo >= 1000 ? 0 : 1), L - 6, pBot);
+    text("100%", L - 6, dTop + 8);
+    text("0%", L - 6, dBot);
+    text(shortDate(DATA.dates[0]), L, H - 4, "start");
+    text(shortDate(DATA.dates[n - 1]), W - R, H - 4, "end");
+    box.replaceChildren(svg);
+  }
+  function deliverablesCard(st) {
+    const n = DATA.dates.length, idx = [];
+    for (let i = n - 1; i >= 0 && idx.length < 20; i--) if (st.h.c[i] != null) idx.push(i);
+    return h("section", { class: "card" }, h("h3", { text: "Deliverables, last 20 sessions" }),
+      h("div", { class: "tbl" }, h("table", {},
+        h("thead", {}, h("tr", {}, ["Date", "Close", "Chg %", "Traded", "Del qty", "Del %", "5D avg"].map((t) => h("th", { scope: "col", text: t })))),
+        h("tbody", {}, idx.map((i) => h("tr", {},
+          h("td", { text: shortDate(DATA.dates[i]) }),
+          h("td", { text: price(st.h.c[i]) }),
+          h("td", { class: dir(st.h.chg[i]), text: signed(st.h.chg[i], 1, "") }),
+          h("td", { text: qty(st.h.v[i]) }),
+          h("td", { text: qty(st.h.dq[i]) }),
+          h("td", { class: st.h.dp[i] != null && st.h.dp5[i] != null && st.h.dp[i] > st.h.dp5[i] ? "hi" : null, text: fmt(st.h.dp[i], 1) }),
+          h("td", { text: fmt(st.h.dp5[i], 1) })))))),
+      h("p", { class: "note", text: "Del % in blue is above that day's 5-day average." }));
+  }
+  function futuresCard(st) {
+    const card = h("section", { class: "card" }, h("h3", { text: "Futures open interest" }));
+    if (st.oi == null && !st.h.oi.some((v) => v != null)) {
+      card.append(h("p", { class: "note", text: "No stock futures data for this symbol." }));
+      return card;
+    }
+    if (st.oi != null) card.append(h("p", { style: "margin:0 0 8px" }, `${qty(st.oi)} shares, ${signed(st.oic, 1)} today. `, h("b", { text: st.bu || "" })));
+    const n = DATA.dates.length, idx = [];
+    for (let i = n - 1; i >= 0 && idx.length < 10; i--) if (st.h.oi[i] != null) idx.push(i);
+    card.append(h("div", { class: "tbl" }, h("table", {},
+      h("thead", {}, h("tr", {}, ["Date", "Price", "OI", "OI chg", "Reading"].map((t) => h("th", { scope: "col", text: t })))),
+      h("tbody", {}, idx.map((i) => h("tr", {},
+        h("td", { text: shortDate(DATA.dates[i]) }),
+        h("td", { class: dir(st.h.chg[i]), text: signed(st.h.chg[i], 1) }),
+        h("td", { text: qty(st.h.oi[i]) }),
+        h("td", { text: signed(st.h.oic[i], 1) }),
+        h("td", { class: { "Long buildup": "up", "Short covering": "up", "Short buildup": "down", "Long unwinding": "down" }[st.h.bu[i]] || null, text: st.h.bu[i] || "–" })))))));
+    card.append(h("p", { class: "note", text: "Open interest is summed across all live expiries, so monthly roll-overs don't show up as new positions. On expiry day the reading is left out." }));
+    return card;
+  }
+  function dealsCard(st) {
+    const mine = DATA.deals.filter((d) => d.s === st.s).reverse();
+    const card = h("section", { class: "card" }, h("h3", { text: "Bulk and block deals" }));
+    if (!mine.length) {
+      card.append(h("p", { class: "note", text: `None recorded since ${shortDate(DATA.dates[0])}.` }));
+      return card;
+    }
+    card.append(h("ul", { class: "deals" }, mine.map((d) => h("li", {},
+      h("div", { text: `${shortDate(d.d)}: ${d.k === "BLOCK" ? "block" : "bulk"} deal, ${d.bs.toLowerCase()} ${qty(d.q)} shares at ${rupees(d.p)}` }),
+      h("div", { class: "who", text: d.cl })))));
+    if (st.deal) card.append(h("p", { class: "note", text: st.deal.held
+      ? `The close of ${rupees(st.c)} is at or above the latest deal price of ${rupees(st.deal.p)}.`
+      : `The close of ${rupees(st.c)} is below the latest deal price of ${rupees(st.deal.p)}.` }));
+    return card;
+  }
+
+
+  // ---------------------------------------------------------------- MTF rules (settings and trades stay on this device)
+  const DEFAULTS = { pot: 100000, riskPct: 2, maxLev: 2, maxPos: 4, maxSector: 2, stopMax: 5, minScore: 4,
+    tsDays: 10, tsGain: 3, hardDays: 20, killPct: 10, rate: 0.04, holdings: [] };
+  const BOOK_KEY = "dr-mtf";
+  const book = (() => {
+    let b = {};
+    try { b = JSON.parse(localStorage.getItem(BOOK_KEY) || "{}") || {}; } catch { b = {}; }
+    return { settings: { ...DEFAULTS, ...(b.settings || {}) },
+      positions: Array.isArray(b.positions) ? b.positions : [],
+      closed: Array.isArray(b.closed) ? b.closed : [], killUntil: b.killUntil || null };
+  })();
+  const saveBook = () => { try { localStorage.setItem(BOOK_KEY, JSON.stringify(book)); } catch { /* private mode */ } };
+  const S = () => book.settings;
+  let prefill = null, mtfScroll = 0;
+
+  const addDays = (iso, n) => { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const addSessions = (iso, n) => {
+    let d = iso, k = 0;
+    while (k < n) { d = addDays(d, 1); const wd = new Date(d + "T00:00:00Z").getUTCDay(); if (wd !== 0 && wd !== 6) k++; }
+    return d;
+  };
+  const daysBetween = (a, b) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 864e5);
+  const todayIST = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+
+  // Zerodha: 0.04%/day interest on the funded part, ₹15 + GST pledge and unpledge per stock,
+  // brokerage ₹20 or 0.3% per MTF order (cash delivery is free); STT, stamp, exchange and DP charges approximate.
+  function charges(notional, funded, days) {
+    const mtf = funded > 0.5;
+    const brokerage = mtf ? 2 * Math.min(20, 0.003 * notional) : 0;
+    const stt = 0.001 * notional * 2, stamp = 0.00015 * notional, txn = 0.0000297 * notional * 2, sebi = notional * 2 * 10 / 1e7;
+    const fixed = brokerage + stt + stamp + txn + sebi + 0.18 * (brokerage + txn + sebi) + 15.93 + (mtf ? 2 * 17.7 : 0);
+    const interest = mtf ? funded * S().rate / 100 * Math.max(0, days) : 0;
+    return { fixed, interest, total: fixed + interest };
+  }
+  function mode() {
+    const s = S(), r = DATA.market.regime;
+    if (book.killUntil && book.killUntil >= DATA.asof) return { key: "kill", lev: 1, factor: 0.5 };
+    if (r === "red") return { key: "red", lev: 1, factor: 0.5 };
+    return { key: r, lev: Math.max(1, Math.min(r === "green" ? 2 : 1.5, s.maxLev)), factor: 1 };
+  }
+  function evaluate(st) {
+    const s = S(), open = book.positions;
+    const held = s.holdings.includes(st.s), inOpen = open.some((p) => p.sym === st.s);
+    const inSector = open.filter((p) => p.sector && p.sector === st.ind).length;
+    const checks = [
+      { label: `Footprint score ${s.minScore} or more`, ok: st.score >= s.minScore, val: `${st.score} of 6` },
+      { label: "Close above the 10-day high on above-average delivery", ok: !!st.t1,
+        val: `Close ${rupees(st.c)} vs high ${rupees(st.hi10)}; delivery ${fmt(st.dp, 1)}% vs ${fmt(st.dpp, 1)}%` },
+      { label: "Futures long buildup", ok: !!st.t2,
+        val: st.bu ? st.bu + (st.oic != null && st.bu !== "Expiry day" ? `, open interest ${signed(st.oic, 1)}` : "") : "No futures data" },
+      { label: `Stop within ${s.stopMax}% of the close`, ok: st.stopp != null && st.stopp <= s.stopMax,
+        val: st.stop != null ? `${rupees(st.stop)}, ${fmt(st.stopp, 1)}% below, just under the 5-day low of ${rupees(st.lo5)}` : "–" },
+      { label: "No negative institutional note", ok: !(st.note && st.note.bias === -1),
+        val: st.note ? `${st.note.text}${st.note.as_of ? ` (${shortDate(st.note.as_of)})` : ""}` : "No note on file" },
+      { label: "Not already held or traded", ok: !held && !inOpen,
+        val: held ? "It's in your holdings" : inOpen ? "You already have an MTF trade in it" : "Not held" },
+      { label: `A free slot (max ${s.maxPos}, ${s.maxSector} per sector)`, ok: open.length < s.maxPos && inSector < s.maxSector,
+        val: `${open.length} of ${s.maxPos} open, ${inSector} in ${st.ind || "this sector"}` },
+    ];
+    const entryMissing = checks.slice(0, 4).filter((c) => !c.ok).length;
+    const personalOk = checks.slice(4).every((c) => c.ok);
+    const why = held ? "you already own it" : inOpen ? "you already have an MTF trade in it"
+      : st.note && st.note.bias === -1 ? "skip, negative institutional note"
+      : !checks[6].ok ? "no free slot" : "not a candidate today";
+    return { checks, why, status: personalOk && entryMissing === 0 ? "ready" : personalOk && entryMissing === 1 ? "near" : "no" };
+  }
+  function plan(st) {
+    const s = S(), m = mode();
+    if (st.c == null || st.stop == null || st.stopp == null) return null;
+    const risk = s.pot * s.riskPct / 100 * m.factor;
+    const byRisk = risk / (Math.max(st.stopp, 0.5) / 100);
+    const cap = s.pot / Math.max(1, s.maxPos) * m.factor * m.lev;
+    const n = Math.floor(Math.min(byRisk, cap) / st.c);
+    const notional = n * st.c, own = notional / m.lev, funded = notional - own;
+    const c10 = charges(notional, funded, Math.round(s.tsDays * 1.4)), c20 = charges(notional, funded, Math.round(s.hardDays * 1.4));
+    return { m, qty: n, notional, own, funded, risk, c10, c20,
+      loss: n * (st.c - st.stop) + charges(notional, funded, 3).total,
+      be10: notional ? c10.total / notional * 100 : null, be20: notional ? c20.total / notional * 100 : null,
+      target: st.c * (1 + s.tsGain / 100), day10: addSessions(DATA.asof, s.tsDays), day20: addSessions(DATA.asof, s.hardDays) };
+  }
+  function track(p) {
+    const s = S(), st = DATA.stocks.find((x) => x.s === p.sym);
+    const last = st ? st.c : null;
+    const sessions = DATA.dates.filter((d) => d >= p.date).length;
+    const notional = p.entry * p.qty, own = notional / p.lev, funded = notional - own;
+    const ch = charges(notional, funded, daysBetween(p.date, DATA.asof));
+    const net = last != null ? (last - p.entry) * p.qty - ch.total : null;
+    const gain = last != null ? (last / p.entry - 1) * 100 : null;
+    let action = "Hold", why = `Day ${sessions} of ${s.hardDays}`;
+    if (last != null && p.stop && last < p.stop) { action = "Exit"; why = `Closed at ${rupees(last)}, below your stop of ${rupees(p.stop)}`; }
+    else if (sessions >= s.hardDays) { action = "Exit"; why = `Day ${sessions}: the ${s.hardDays}-day limit is up`; }
+    else if (sessions >= s.tsDays && gain != null && gain < s.tsGain) { action = "Exit"; why = `Day ${sessions}: not up ${s.tsGain}% by day ${s.tsDays}`; }
+    else if (sessions < s.tsDays) why = `Day ${sessions}. By day ${s.tsDays} it needs to close at ${rupees(p.entry * (1 + s.tsGain / 100))} or more`;
+    else why = `Day ${sessions}. Passed the day-${s.tsDays} check; exit by day ${s.hardDays}`;
+    return { last, sessions, own, ch, net, gain, action, why, ret: net != null && own ? net / own * 100 : null };
+  }
+  function bookPnl() {
+    const open = book.positions.reduce((a, p) => a + (track(p).net ?? 0), 0);
+    const closed = book.closed.reduce((a, c) => a + (c.net ?? 0), 0);
+    return { open, closed, total: open + closed };
+  }
+  function checkKill() {
+    const s = S();
+    if (bookPnl().total <= -s.pot * s.killPct / 100 && !(book.killUntil && book.killUntil >= DATA.asof)) {
+      book.killUntil = addDays(DATA.asof, 30);
+      saveBook();
+    }
+  }
+  function updateTabCount() {
+    const n = DATA.stocks.filter((st) => evaluate(st).status === "ready").length;
+    $("#mtf-count").textContent = n ? String(n) : "";
+  }
+
+  const checkItem = (c) => h("li", { class: c.ok ? "ok" : "no" },
+    h("span", { class: "ic", text: c.ok ? "✓" : "×", "aria-label": c.ok ? "Met" : "Not met" }),
+    h("span", { text: c.label }), h("span", { class: "val", text: c.val }));
+  function planGrid(st, p) {
+    const s = S();
+    if (!p.qty) return h("p", { class: "note", text: `One share at ${rupees(st.c)} is more than this trade's limit, so skip it.` });
+    const cell = (k, v, sub) => h("div", {}, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub ? h("div", { class: "s", text: sub }) : null);
+    return h("div", { class: "plan" },
+      cell("Buy", `${p.qty} shares`, `near ${rupees(st.c)}, next session`),
+      cell("Position", rupeesShort(p.notional), p.m.lev > 1 ? `yours ${rupeesShort(p.own)}, funded ${rupeesShort(p.funded)}` : "all your own money, no MTF"),
+      cell("Stop", rupees(st.stop), `${MINUS}${fmt(st.stopp, 1)}%, on a closing basis`),
+      cell("Loss at stop", rupees(p.loss, 0), `${fmt(p.loss / s.pot * 100, 1)}% of your pot`),
+      cell(`Day ${s.tsDays} check`, `about ${shortDate(p.day10)}`, `needs ${rupees(p.target)}, +${s.tsGain}%`),
+      cell("Hard exit", `about ${shortDate(p.day20)}`, `day ${s.hardDays}`),
+      cell(`Costs to day ${s.tsDays}`, rupees(p.c10.total, 0), `break-even ${signed(p.be10, 2)}`),
+      cell(`Costs to day ${s.hardDays}`, rupees(p.c20.total, 0), `break-even ${signed(p.be20, 2)}`));
+  }
+  const goStock = (sym) => { mtfScroll = window.scrollY; cameFromList = true; location.hash = "s=" + encodeURIComponent(sym); };
+  const logTrade = (sym) => { prefill = sym; if (location.hash === "#mtf") { renderMTF(); document.getElementById("add-trade")?.scrollIntoView(); } else location.hash = "mtf"; };
+
+  function mtfCard(st) {
+    const ev = evaluate(st), p = plan(st);
+    const title = { ready: "ready for a trade", near: "one rule away", no: ev.why }[ev.status];
+    return h("section", { class: "card" }, h("h3", { text: `MTF check: ${title}` }),
+      ev.status !== "no" && p ? planGrid(st, p) : null,
+      h("ul", { class: "checks" }, ev.checks.map(checkItem)),
+      ev.status === "ready" ? h("div", { class: "btns" }, h("button", { class: "btn small", type: "button", text: "Log this trade", onclick: () => logTrade(st.s) })) : null);
+  }
+  function modeCard(m) {
+    const s = S(), pnl = bookPnl(), pct = pnl.total / s.pot * 100;
+    const head = { kill: "Kill switch", red: "Red", amber: "Amber", green: "Green" }[m.key];
+    const what = m.lev > 1 ? `MTF up to ${m.lev}×, normal size` : "cash only, no MTF, half size";
+    const why = m.key === "kill"
+      ? [`Your trades are down ${fmt(-pct, 1)}% of the pot, past the ${s.killPct}% limit. MTF stays off until ${shortDate(book.killUntil)}.`]
+      : DATA.market.reasons;
+    return h("section", { class: "regime", "data-r": m.key === "kill" ? "red" : m.key },
+      h("p", { class: "verdict" }, h("b", { text: head }), `: ${what}`),
+      h("ul", { class: "why" }, why.map((r) => h("li", { text: r }))),
+      h("div", { class: "figs" },
+        fig("Pot", rupeesShort(s.pot), null, `${s.riskPct}% risk a trade`),
+        fig("Open trades", `${book.positions.length} of ${s.maxPos}`, null, `${s.maxSector} per sector`),
+        fig("Your P&L", rupeesShort(pnl.total), null, `${signed(pct, 1)} of pot`),
+        fig("Kill switch", `${MINUS}${s.killPct}%`, null, m.key === "kill" ? "on" : "not hit")));
+  }
+  function candidateCard(st, ev) {
+    const p = plan(st);
+    return h("article", { class: "cand" },
+      h("h3", {}, h("span", { text: st.s }), h("span", { class: "px" }, rupees(st.c) + " ", h("span", { class: "chg " + dir(st.chg), text: signed(st.chg) }))),
+      h("p", { class: "sub", text: [st.n, st.ind].filter(Boolean).join(", ") }),
+      p ? planGrid(st, p) : null,
+      h("ul", { class: "checks" }, ev.checks.map(checkItem)),
+      h("div", { class: "btns" },
+        h("button", { class: "btn small", type: "button", text: "Log this trade", onclick: () => logTrade(st.s) }),
+        h("button", { class: "btn small ghost", type: "button", text: "Stock details", onclick: () => goStock(st.s) })));
+  }
+  function nearCard(near) {
+    const card = h("section", { class: "card" }, h("h3", { text: `One rule away (${near.length})` }));
+    if (!near.length) { card.append(h("p", { class: "note", text: "None today." })); return card; }
+    card.append(h("div", { class: "list", style: "margin:0 -14px -14px" }, near.slice(0, 15).map(([st, ev]) =>
+      h("button", { class: "row near-row", type: "button", onclick: () => goStock(st.s) },
+        h("span", { class: "sym", text: st.s }),
+        h("span", { class: "miss", text: "Needs: " + ev.checks.slice(0, 4).find((c) => !c.ok).label.toLowerCase() })))));
+    return card;
+  }
+  function closeControls(p, t) {
+    const form = h("div", { class: "form", hidden: true, style: "margin-top:10px" });
+    const exitP = h("input", { type: "number", step: "0.05", inputmode: "decimal", value: t.last ?? p.entry });
+    const exitD = h("input", { type: "date", value: DATA.asof });
+    form.append(h("label", {}, "Sold at", exitP), h("label", {}, "Sold on", exitD),
+      h("div", { class: "actions" },
+        h("button", { class: "btn small", type: "button", text: "Save exit", onclick: () => {
+          const x = Number(exitP.value);
+          if (!(x > 0)) return;
+          const notional = p.entry * p.qty, own = notional / p.lev;
+          const ch = charges(notional, notional - own, daysBetween(p.date, exitD.value || DATA.asof));
+          const net = (x - p.entry) * p.qty - ch.total;
+          book.closed.push({ ...p, exit: x, exitDate: exitD.value || DATA.asof, net, ret: net / own * 100 });
+          book.positions = book.positions.filter((q) => q.id !== p.id);
+          saveBook(); checkKill(); renderMTF(); updateTabCount();
+        } }),
+        h("button", { class: "btn small ghost", type: "button", text: "Delete entry", onclick: () => {
+          if (confirm(`Delete the ${p.sym} trade from this list without recording an exit?`)) {
+            book.positions = book.positions.filter((q) => q.id !== p.id); saveBook(); renderMTF(); updateTabCount();
+          }
+        } })));
+    const btn = h("button", { class: "btn small ghost", type: "button", text: "Close trade", onclick: () => { form.hidden = !form.hidden; } });
+    return h("div", { style: "margin-top:8px" }, btn, form);
+  }
+  function positionsCard() {
+    const card = h("section", { class: "card", id: "positions" }, h("h3", { text: `Your MTF trades (${book.positions.length} open)` }));
+    if (!book.positions.length) card.append(h("p", { class: "note", text: "Nothing logged yet. Log a trade from a ready stock or with the form below." }));
+    for (const p of book.positions) {
+      const t = track(p);
+      card.append(h("div", { class: "pos" },
+        h("div", { class: "r1" },
+          h("span", { class: "sym", text: p.sym }), h("span", { class: "act " + (t.action === "Exit" ? "exit" : "hold"), text: t.action }),
+          h("span", { class: "px", text: t.last != null ? rupees(t.last) : "no data" }),
+          h("span", { class: "chg " + dir(t.gain), text: signed(t.gain) })),
+        h("p", { class: "line", text: t.why }),
+        h("p", { class: "line", text: `${p.qty} shares at ${rupees(p.entry)} on ${shortDate(p.date)}, ${p.lev}×, stop ${p.stop ? rupees(p.stop) : "not set"}` }),
+        h("p", { class: "line" }, "Net ", h("b", { text: rupees(t.net, 0) }),
+          ` after ${rupees(t.ch.total, 0)} in charges (${rupees(t.ch.interest, 0)} interest): `, h("b", { text: signed(t.ret, 1) }), " on your money"),
+        closeControls(p, t)));
+    }
+    if (book.closed.length) {
+      const n = book.closed.length, avgNet = book.closed.reduce((a, c) => a + (c.net || 0), 0) / n;
+      card.append(h("p", { class: "note", text: `${n} closed trade${n > 1 ? "s" : ""}, averaging ${rupees(avgNet, 0)} each. ` +
+        (n >= 10 && avgNet > 0 ? "Scale-up rule met: the pot can go to ₹2 lakh, still at 2× or less." : "The scale-up rule needs 10 closed trades with a positive average.") }));
+    }
+    return card;
+  }
+  function addFormCard() {
+    const m = mode();
+    const sel = h("select", {}, DATA.stocks.map((st) => h("option", { value: st.s, text: st.s })));
+    const date = h("input", { type: "date", value: todayIST() });
+    const entry = h("input", { type: "number", step: "0.05", inputmode: "decimal" });
+    const q = h("input", { type: "number", step: "1", min: "1", inputmode: "numeric" });
+    const lev = h("select", {}, [1, 1.5, 2, 2.5, 3, 4, 5].map((x) => h("option", { value: String(x), text: x + "×" })));
+    const stop = h("input", { type: "number", step: "0.05", inputmode: "decimal" });
+    const fill = () => {
+      const st = DATA.stocks.find((x) => x.s === sel.value);
+      if (!st) return;
+      const p = plan(st);
+      entry.value = st.c ?? "";
+      stop.value = st.stop != null ? st.stop.toFixed(2) : "";
+      q.value = p && p.qty ? p.qty : "";
+      lev.value = String(m.lev);
+    };
+    sel.addEventListener("change", fill);
+    if (prefill && DATA.stocks.some((x) => x.s === prefill)) sel.value = prefill;
+    fill();
+    return h("section", { class: "card", id: "add-trade" }, h("h3", { text: "Log a trade" }),
+      h("div", { class: "form" },
+        h("label", {}, "Stock", sel), h("label", {}, "Bought on", date),
+        h("label", {}, "Price paid", entry), h("label", {}, "Quantity", q),
+        h("label", {}, "Leverage", lev), h("label", {}, "Stop, closing basis", stop),
+        h("div", { class: "actions" }, h("button", { class: "btn", type: "button", text: "Add trade", onclick: () => {
+          const st = DATA.stocks.find((x) => x.s === sel.value);
+          const rec = { id: Date.now().toString(36), sym: sel.value, date: date.value || DATA.asof, entry: Number(entry.value),
+            qty: Math.floor(Number(q.value)), lev: Number(lev.value) || 1, stop: Number(stop.value) || null, sector: st ? st.ind : "" };
+          if (!(rec.entry > 0) || !(rec.qty > 0)) { alert("Enter the price paid and the quantity."); return; }
+          book.positions.push(rec);
+          saveBook(); prefill = null; checkKill(); renderMTF(); updateTabCount();
+          document.getElementById("positions")?.scrollIntoView();
+        } }))),
+      h("p", { class: "note", text: "Trades, holdings and settings are saved in this browser on this phone only. They never go to GitHub." }));
+  }
+  function settingsCard() {
+    const s = S();
+    const fields = [
+      ["pot", "Pot, your money (₹)", 1000], ["riskPct", "Risk per trade, % of pot", 0.1], ["maxLev", "Leverage cap (×)", 0.5],
+      ["maxPos", "Most open trades", 1], ["maxSector", "Most per sector", 1], ["stopMax", "Widest stop, %", 0.5],
+      ["minScore", "Lowest footprint score", 1], ["tsDays", "Time check at day", 1], ["tsGain", "Gain needed by then, %", 0.5],
+      ["hardDays", "Hard exit at day", 1], ["killPct", "Kill switch, % of pot", 1], ["rate", "MTF interest, % a day", 0.005],
+    ];
+    const inputs = {};
+    const holdings = h("input", { type: "text", value: s.holdings.join(", "), placeholder: "e.g. TCS, RELIANCE", autocapitalize: "characters", autocomplete: "off" });
+    return h("details", { class: "card" }, h("summary", { text: "Your rules and holdings" }),
+      h("div", { class: "form" },
+        fields.map(([k, label, step]) => h("label", {}, label, (inputs[k] = h("input", { type: "number", step: String(step), inputmode: "decimal", value: s[k] })))),
+        h("label", { class: "wide" }, "Stocks you already own (no MTF in these)", holdings),
+        h("div", { class: "actions" },
+          h("button", { class: "btn", type: "button", text: "Save settings", onclick: () => {
+            for (const [k] of fields) { const v = Number(inputs[k].value); if (Number.isFinite(v) && v >= 0) book.settings[k] = v; }
+            book.settings.holdings = holdings.value.split(/[\s,]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
+            saveBook(); renderMTF(); updateTabCount();
+          } }),
+          h("button", { class: "btn ghost", type: "button", text: "Reset to the plan", onclick: () => {
+            book.settings = { ...DEFAULTS, holdings: book.settings.holdings }; saveBook(); renderMTF(); updateTabCount();
+          } }))));
+  }
+  function rulesCard() {
+    const s = S();
+    const items = [
+      `Market regime: red (FIIs sold over ₹10,000 cr in 5 sessions, India VIX above 18, or Nifty below its 50-day average) means cash only at half size; amber allows up to 1.5×; green (FIIs net buyers, Nifty above its 50- and 200-day averages) up to 2×. Your cap is ${s.maxLev}×.`,
+      `Entry: footprint score ${s.minScore}+; a close above the previous 10-day high with delivery % above its 20-day average; futures long buildup; and a stop within ${s.stopMax}%, placed ${DATA.mtf ? DATA.mtf.stop_buffer_pct : 0.25}% under the 5-session low.`,
+      `Size: risk ${s.riskPct}% of the pot (${rupees(s.pot * s.riskPct / 100, 0)}) per trade, divided by the stop distance, with no more than ${rupeesShort(s.pot / Math.max(1, s.maxPos))} of your own money in one trade.`,
+      `Exits: a close below the stop (sell before 3:30 PM); not up ${s.tsGain}% by day ${s.tsDays}; day ${s.hardDays} at the latest. Keep a GTT emergency stop on MTF trades.`,
+      `Limits: ${s.maxPos} open trades, ${s.maxSector} per sector, none in stocks you own or with a negative institutional note. If your trades lose ${s.killPct}% of the pot, MTF switches off for 30 days. Raise the pot to ₹2 lakh only after 10 closed trades with a positive average.`,
+      `Costs (Zerodha): ${s.rate}% a day on the funded amount; ₹15 + GST to pledge and to unpledge; brokerage ₹20 or 0.3% per MTF order; STT 0.1% on each side; stamp duty 0.015% on buying; a DP charge on selling.`,
+    ];
+    return h("details", { class: "card" }, h("summary", { text: "The rules this tab applies" }), h("ol", { class: "rules" }, items.map((x) => h("li", { text: x }))));
+  }
+  function backupCard() {
+    const ta = h("textarea", { rows: "4", placeholder: "Paste a backup here to restore it" });
+    return h("details", { class: "card" }, h("summary", { text: "Back up or move your trades" }),
+      h("div", { class: "form" },
+        h("div", { class: "actions" },
+          h("button", { class: "btn small", type: "button", text: "Copy backup", onclick: async (e) => {
+            const btn = e.currentTarget, txt = JSON.stringify(book);
+            try { await navigator.clipboard.writeText(txt); btn.textContent = "Copied"; } catch { ta.value = txt; ta.select(); }
+          } }),
+          h("button", { class: "btn small ghost", type: "button", text: "Restore", onclick: () => {
+            try {
+              const b = JSON.parse(ta.value);
+              if (!b || !Array.isArray(b.positions)) throw new Error("bad");
+              book.settings = { ...DEFAULTS, ...(b.settings || {}) };
+              book.positions = b.positions;
+              book.closed = Array.isArray(b.closed) ? b.closed : [];
+              book.killUntil = b.killUntil || null;
+              saveBook(); renderMTF(); updateTabCount();
+            } catch { alert("That isn't a Delivery Radar backup."); }
+          } })),
+        h("label", { class: "wide" }, "Backup text", ta)));
+  }
+  function renderMTF() {
+    checkKill();
+    const m = mode();
+    const evals = DATA.stocks.map((st) => [st, evaluate(st)]);
+    const ready = evals.filter(([, e]) => e.status === "ready").sort((a, b) => b[0].score - a[0].score || a[0].stopp - b[0].stopp);
+    const near = evals.filter(([, e]) => e.status === "near").sort((a, b) => b[0].score - a[0].score);
+    $("#mtf-view").replaceChildren(
+      modeCard(m),
+      h("section", { class: "card" }, h("h3", { text: `Ready today (${ready.length})` }),
+        h("p", { class: "note", style: "margin-top:0", text: ready.length
+          ? (m.lev > 1 ? "Each passes every entry rule. Sizes follow your risk and leverage limits." : "Each passes every entry rule. The regime allows cash only, so sizes are half size with no borrowing.")
+          : "No stock passes every entry rule today. Waiting is part of the plan." })),
+      ...ready.map(([st, ev]) => candidateCard(st, ev)),
+      nearCard(near), positionsCard(), addFormCard(), settingsCard(), rulesCard(), backupCard(),
+      h("p", { class: "foot", text: "Checks run on NSE's closing data, so act in the next session. For information only, not investment advice." }));
+  }
+
+  // ---------------------------------------------------------------- live cues
+  // GIFT Nifty, crude in US$ and USD/INR, fetched by the browser itself every 20 seconds while the page is open.
+  // TradingView's quote scanner answers everything in one request; CNBC (crude, USD/INR) and Moneycontrol
+  // (GIFT Nifty) step in for anything it doesn't return. All three allow calls from any web page.
+  const Live = (() => {
+    const TV_URL = "https://scanner.tradingview.com/global/scan";
+    const TV_COLS = ["close", "change", "change_abs", "update_mode", "volume", "current_session", "expiration"];
+    const CNBC_URL = "https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=" +
+      encodeURIComponent("@LCO.1|@LCO.2|@CL.1|@CL.2|INR=") +
+      "&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json&events=1";
+    const MC_URL = "https://priceapi.moneycontrol.com/technicalCompanyData/globalMarket/" +
+      "getGlobalIndicesListingData?view=overview&deviceType=W";
+    const EVERY = 20000, RETRY = 45000, TIMEOUT = 8000, LIVE_FOR = 90000, KEY = "dr-live";
+    const CODES = "FGHJKMNQUVXZ";
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const num = (s) => {
+      if (s == null || s === "") return null;
+      const x = parseFloat(String(s).replace(/[,%+]/g, ""));
+      return Number.isFinite(x) ? x : null;
+    };
+    let last = (() => {
+      try { const c = JSON.parse(localStorage.getItem(KEY) || "null"); return c && c.at && Date.now() - c.at < 4 * 864e5 ? c : null; }
+      catch { return null; }
+    })();
+    let busy = false, failing = false, timer = null, lastTry = 0;
+
+    // The clock in India, whatever the phone's own time zone.
+    function ist(d = new Date()) {
+      const p = {};
+      for (const x of new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric", month: "numeric",
+        day: "numeric", hour: "numeric", minute: "numeric", weekday: "short", hourCycle: "h23" }).formatToParts(d)) p[x.type] = x.value;
+      const y = +p.year, m = +p.month, day = +p.day;
+      return { y, m, ymd: y * 10000 + m * 100 + day, mins: (+p.hour % 24) * 60 + +p.minute, wd: p.weekday };
+    }
+    // Futures month code k months after the current Indian month, e.g. k = 1 in Oct 2026 is "X2026" (Nov).
+    const month = (t, k) => { const i = t.m - 1 + k; return { code: CODES[i % 12] + (t.y + Math.floor(i / 12)), mon: MON[i % 12] }; };
+    // NSE and NSE IX monthly Nifty contracts stop trading at 3:30 pm IST on expiry day.
+    const alive = (o, t) => o.expiration == null || o.expiration > t.ymd || (o.expiration === t.ymd && t.mins < 930);
+
+    function getJSON(url, opts) {
+      const ctl = new AbortController();
+      const stop = setTimeout(() => ctl.abort(), TIMEOUT);
+      return fetch(url, { ...opts, signal: ctl.signal, cache: "no-store" })
+        .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+        .finally(() => clearTimeout(stop));
+    }
+
+    async function fromTradingView() {
+      const t = ist();
+      const gift = [0, 1, 2].map((k) => month(t, k));
+      const brent = [1, 2, 3, 4].map((k) => month(t, k));
+      const wti = [1, 2, 3].map((k) => month(t, k));
+      const tickers = [...gift.map((g) => "NSEIX:NIFTY" + g.code), ...gift.map((g) => "NSE:NIFTY" + g.code),
+        "NSEIX:NIFTY1!", "NSE:NIFTY", "ICEEUR:BRN1!", ...brent.map((b) => "ICEEUR:BRN" + b.code),
+        "NYMEX:CL1!", ...wti.map((w) => "NYMEX:CL" + w.code), "FX_IDC:USDINR"];
+      // text/plain keeps this a "simple" cross-site request, so the browser sends it without a preflight.
+      const j = await getJSON(TV_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        body: JSON.stringify({ symbols: { tickers, query: { types: [] } }, columns: TV_COLS }) });
+      const q = {};
+      for (const row of j.data || []) {
+        const o = {};
+        TV_COLS.forEach((c, i) => { o[c] = row.d[i]; });
+        if (typeof o.close === "number") q[row.s] = o;
+      }
+      const quote = (o, mon) => o && { v: o.close, chg: o.change_abs, pct: o.change, open: o.current_session === "market",
+        mon: mon || null, delay: Math.round(+((/delayed_streaming_(\d+)/.exec(o.update_mode || "") || [])[1] || 0) / 60) };
+      const out = {};
+      // GIFT Nifty: the nearest contract still trading. TradingView's own "front" symbol keeps pointing at an
+      // expired contract until the next day, so it is only a fallback here.
+      const g = gift.find((x) => q["NSEIX:NIFTY" + x.code] && alive(q["NSEIX:NIFTY" + x.code], t));
+      if (g) {
+        out.gift = quote(q["NSEIX:NIFTY" + g.code], g.mon);
+        const f = q["NSE:NIFTY" + g.code];
+        if (f) out.fut = { v: f.close, mon: g.mon };
+      } else if (q["NSEIX:NIFTY1!"]) out.gift = quote(q["NSEIX:NIFTY1!"]);
+      if (q["NSE:NIFTY"]) out.nseOpen = q["NSE:NIFTY"].current_session === "market";
+      // Crude: TradingView's continuous contract, which rolls to the most-traded month before expiry.
+      // The month is named by finding the dated contract with the same price.
+      const busiest = (root, months) => {
+        const o = q[root + "1!"];
+        const dated = months.map((x) => [x, q[root + x.code]]).filter(([, e]) => e);
+        if (o) {
+          const twin = dated.filter(([, e]) => e.close === o.close)
+            .sort((a, b) => Math.abs((a[1].volume || 0) - (o.volume || 0)) - Math.abs((b[1].volume || 0) - (o.volume || 0)))[0];
+          return quote(o, twin && twin[0].mon);
+        }
+        const best = dated.filter(([, e]) => alive(e, t)).sort((a, b) => (b[1].volume || 0) - (a[1].volume || 0))[0];
+        return best ? quote(best[1], best[0].mon) : null;
+      };
+      out.brent = busiest("ICEEUR:BRN", brent);
+      out.wti = busiest("NYMEX:CL", wti);
+      if (q["FX_IDC:USDINR"]) out.usdinr = quote(q["FX_IDC:USDINR"]);
+      return out;
+    }
+
+    async function fromCNBC() {
+      const j = await getJSON(CNBC_URL, {});
+      const by = {};
+      for (const x of (j.FormattedQuoteResult && j.FormattedQuoteResult.FormattedQuote) || []) {
+        if (x.code === 0 && num(x.last) != null) by[x.symbol] = x;
+      }
+      const busiest = (...xs) => xs.filter(Boolean).sort((a, b) => (num(b.volume) || 0) - (num(a.volume) || 0))[0];
+      const quote = (x) => x && { v: num(x.last), chg: num(x.change), pct: num(x.change_pct), open: x.curmktstatus === "REG_MKT",
+        mon: ((x.name || "").match(/\((\w{3})'\d{2}\)/) || [])[1] || null, delay: x.realTime === "false" ? 10 : 0 };
+      return { brent: quote(busiest(by["@LCO.1"], by["@LCO.2"])), wti: quote(busiest(by["@CL.1"], by["@CL.2"])),
+        usdinr: quote(by["INR="]) };
+    }
+
+    async function fromMoneycontrol() {
+      const j = await getJSON(MC_URL, {});
+      const cols = (j.header || []).map((x) => x.name);
+      for (const blk of j.dataList || []) {
+        for (const row of blk.data || []) {
+          if (row[0] !== "in;gsx") continue;
+          const o = Object.fromEntries(cols.map((c, i) => [c, row[i]]));
+          if (num(o.price) == null) break;
+          return { v: num(o.price), chg: num(o.net_change), pct: num(o.percent_change), open: o.state === "OPEN", mon: null, delay: 0 };
+        }
+      }
+      throw new Error("GIFT Nifty missing");
+    }
+
+    async function refresh() {
+      if (busy) return;
+      busy = true;
+      lastTry = Date.now();
+      if (!last || failing || Date.now() - last.at >= LIVE_FOR) paint();
+      let q = {};
+      const src = [];
+      try { q = await fromTradingView(); src.push("TradingView"); } catch { /* the backups below cover it */ }
+      const jobs = [];
+      if (!q.brent || !q.usdinr) {
+        jobs.push(fromCNBC().then((c) => {
+          if (!q.brent && c.brent) { q.brent = c.brent; q.wti = c.wti; src.push("CNBC"); }
+          if (!q.usdinr && c.usdinr) { q.usdinr = c.usdinr; if (!src.includes("CNBC")) src.push("CNBC"); }
+        }).catch(() => {}));
+      }
+      if (!q.gift) jobs.push(fromMoneycontrol().then((g) => { q.gift = g; src.push("Moneycontrol"); }).catch(() => {}));
+      await Promise.all(jobs);
+      busy = false;
+      if (q.gift || q.brent || q.usdinr) {
+        const prev = last;
+        last = { ...q, at: Date.now(), src };
+        failing = false;
+        try { localStorage.setItem(KEY, JSON.stringify(last)); } catch { /* private mode */ }
+        paint(prev);
+      } else {
+        failing = true;
+        paint();
+      }
+      schedule();
+    }
+    function schedule() {
+      clearTimeout(timer);
+      if (!document.hidden) timer = setTimeout(refresh, failing ? RETRY : EVERY);
+    }
+
+    const clock = (ms) => {
+      const d = new Date(ms);
+      const today = ist(d).ymd === ist().ymd;
+      return d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit",
+        ...(today ? { second: "2-digit" } : { day: "numeric", month: "short" }) });
+    };
+    function tile(label, x, value, chgDigits, prevX, note) {
+      if (!x) return h("div", { class: "lf" }, h("div", { class: "k", text: label }), h("div", { class: "v", text: "–" }));
+      const name = label + (x.mon ? " · " + x.mon : "");
+      const moved = prevX && prevX.v !== x.v ? (x.v > prevX.v ? " tick-up" : " tick-dn") : "";
+      const chg = x.chg == null ? signed(x.pct) : `${signed(x.chg, chgDigits(x.chg), "")} (${signed(x.pct)})`;
+      return h("div", { class: "lf", role: "group", "aria-label": `${name}: ${value(x.v)}, ${chg}, ${x.open ? "trading" : "closed"}` },
+        h("div", { class: "k" }, h("i", { class: x.open ? "on" : null }), name),
+        h("div", { class: "v" + moved, text: value(x.v) }),
+        h("div", { class: "s " + dir(x.pct), text: chg }),
+        note || null);
+    }
+    function cueLine(q) {
+      const g = q.gift, f = q.fut;
+      if (!g) return null;
+      if (q.nseOpen) return h("p", { class: "live-cue", text: "NSE is trading, so the gap cue pauses until the 3:30 pm close." });
+      if (!f || q.nseOpen == null) return null;
+      const t = ist(new Date(q.at));
+      if (t.wd !== "Sat" && t.wd !== "Sun" && t.mins >= 930 && t.mins < 945) {
+        return h("p", { class: "live-cue", text: "NSE has just closed. The gap cue starts at 3:45 pm, once its 15-minute-delayed prices settle." });
+      }
+      const gap = g.v - f.v, pct = gap / f.v * 100, pts = Math.round(Math.abs(gap));
+      const verdict = Math.abs(pct) < 0.15 ? "Flat start indicated" : gap > 0 ? "Higher start indicated" : "Lower start indicated";
+      return h("p", { class: "live-cue" }, h("b", { text: verdict + ": " }), pts === 0
+        ? `GIFT ${f.mon} is level with the Nifty ${f.mon} futures close of ${fmt(f.v, 0)}.`
+        : `GIFT ${f.mon} is ${pts} points (${fmt(Math.abs(pct), 2)}%) ${gap > 0 ? "above" : "below"} the Nifty ${f.mon} futures close of ${fmt(f.v, 0)}.`);
+    }
+    function paint(prev) {
+      const q = last;
+      const isLive = !!q && !failing && Date.now() - q.at < LIVE_FOR;
+      const anyOpen = !!q && [q.gift, q.brent, q.usdinr].some((x) => x && x.open);
+      const backup = !!q && !(q.src || []).includes("TradingView");
+      let when;
+      if (!q) when = failing ? "Live quotes aren't reachable right now. Retrying…" : "Fetching live quotes…";
+      else if (isLive) {
+        when = [h("b", { text: anyOpen ? "Live" : "Markets closed" }), ` · ${clock(q.at)}`,
+          q.brent && q.brent.delay ? ` · crude ${q.brent.delay} min late` : "", backup ? " · backup feed" : ""];
+      } else when = `Last update ${clock(q.at)}` + (busy || !lastTry ? " · updating…" : failing ? " · retrying" : "");
+      const top = h("div", { class: "live-top" },
+        h("span", { class: "beat" + (isLive && anyOpen ? (backup ? " warn" : " ok") : "") + (prev && isLive ? " fresh" : ""), "aria-hidden": "true" }),
+        h("span", { class: "when" }, when),
+        h("button", { type: "button", disabled: busy || null, onclick: () => refresh(), text: "Refresh" }));
+      const box = $("#live");
+      if (!q) { box.replaceChildren(top); return; }
+      const p = prev || {};
+      const wti = q.wti && h("div", { class: "n " + dir(q.wti.pct), text: `WTI $${fmt(q.wti.v, 2)} ${signed(q.wti.pct, 1)}` });
+      box.replaceChildren(...[top,
+        h("div", { class: "lfigs" },
+          tile("GIFT Nifty", q.gift, (v) => fmt(v, 1), (c) => Number.isInteger(c) ? 0 : 1, p.gift),
+          tile("Brent", q.brent, (v) => "$" + fmt(v, 2), () => 2, p.brent, wti),
+          tile("USD/INR", q.usdinr, (v) => fmt(v, 2), () => 2, p.usdinr)),
+        cueLine(q)].filter(Boolean));
+    }
+
+    function start() {
+      paint();
+      refresh();
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) { clearTimeout(timer); return; }
+        if (Date.now() - lastTry > 10000) refresh(); else schedule();
+      });
+      window.addEventListener("online", () => refresh());
+    }
+    return { start };
+  })();
+
+  // ---------------------------------------------------------------- routing and start-up
+  function route() {
+    if (!DATA) return;
+    updateTabCount();
+    const m = location.hash.match(/^#s=(.+)$/);
+    if (m) { $("#apphead").hidden = true; showDetail(decodeURIComponent(m[1])); return; }
+    $("#apphead").hidden = false;
+    $("#detail").hidden = true;
+    const onMtf = location.hash === "#mtf";
+    $("#tab-stocks").setAttribute("aria-selected", String(!onMtf));
+    $("#tab-mtf").setAttribute("aria-selected", String(onMtf));
+    $("#list-view").hidden = onMtf;
+    $("#mtf-view").hidden = !onMtf;
+    if (onMtf) {
+      renderMTF();
+      const target = prefill && document.getElementById("add-trade");
+      if (target) target.scrollIntoView(); else window.scrollTo(0, mtfScroll);
+    } else {
+      renderChips();
+      renderRows();
+      window.scrollTo(0, listScroll);
+    }
+    cameFromList = false;
+  }
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const m = location.hash.match(/^#s=(.+)$/);
+      if (m && !$("#detail").hidden) { const st = DATA.stocks.find((x) => x.s === decodeURIComponent(m[1])); if (st) drawChart(st); }
+    }, 150);
+  });
+  window.addEventListener("hashchange", route);
+
+  Live.start();
+  fetch("data.json?v=" + Date.now(), { cache: "no-store" })
+    .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then((d) => {
+      DATA = d;
+      checkKill();
+      renderHeader();
+      renderControls();
+      $("#tab-stocks").addEventListener("click", () => { if (location.hash === "#mtf") mtfScroll = window.scrollY; location.hash = ""; });
+      $("#tab-mtf").addEventListener("click", () => { if (location.hash !== "#mtf") listScroll = window.scrollY; location.hash = "mtf"; });
+      route();
+    })
+    .catch(() => {
+      $("#asof").textContent = "The data file isn't there yet.";
+      $("#list").replaceChildren(h("p", { class: "empty", text: "Once the nightly job has run (around 10 PM on weekdays), this page fills itself. You can also start the job by hand from the repository's Actions tab." }));
+    });
+})();
+</script>
+</body>
+</html>

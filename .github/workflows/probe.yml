@@ -1,27 +1,26 @@
-name: Probe live quote sources (temporary)
+name: Live strip browser test (temporary)
 on:
   push:
     branches: [probe-live-sources]
-    paths: [probe.py, .github/workflows/probe.yml]
-  workflow_dispatch: {}
+    paths: [e2e/e2e.py, e2e/mode.txt, e2e/docs/index.html, .github/workflows/probe.yml]
 permissions:
   contents: write
 concurrency:
   group: probe
   cancel-in-progress: true
 jobs:
-  probe:
+  e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install requests
-      - run: python probe.py > out.jsonl 2>&1 || true
+      - run: pip install playwright==1.48.0 && python -m playwright install --with-deps chromium
+      - run: python e2e/e2e.py e2e/docs e2e/out "$(cat e2e/mode.txt)" > e2e/out.log 2>&1 || true
       - run: |
           git config user.name "delivery-radar-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add out.jsonl
-          git commit -m "probe output" && git push
+          git add -A e2e/out e2e/out.log
+          git commit -m "e2e output" && git push
