@@ -507,7 +507,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
       st.bu ? `${st.bu}${st.oic != null && st.bu !== "Expiry day" ? `, open interest ${signed(st.oic, 1)}` : ""}` : "No futures data for this day",
       `${rupees(st.c)} vs ${rupees(st.sma20)}`,
       `${rupees(st.c)} vs ${rupees(st.hi10)}`,
-      `${times(st.dqx)} (${qty(st.dq)} vs ${qty(st.dq5)} 5-day average)`,
+      `${times(st.dqx)} (${qty(st.dq)} today vs ${qty(st.dqp)} average of the previous 5 sessions)`,
     ];
     return h("section", { class: "card" },
       h("div", { class: "scorehead" }, h("span", { class: "big", text: `${st.score} of 6` }), scoreDots(st)),
@@ -528,7 +528,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         cell("Volume", qty(st.v), `${times(st.vx)} its 20-day average`),
         cell("Turnover", st.to != null ? `₹${fmt(st.to, 0)} cr` : "–", `${qty(st.nt)} trades`),
         cell("Average trade", rupeesShort(st.ats), `${times(st.atsx)} its 20-day average`),
-        cell("Delivered qty", times(st.dqx), "vs its 5-day average")));
+        cell("Delivered qty", times(st.dqx), `vs ${qty(st.dqp)} a day, previous 5 sessions`)));
   }
   function chartCard(st) {
     return h("section", { class: "card" },

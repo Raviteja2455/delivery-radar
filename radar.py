@@ -547,7 +547,8 @@ def stock_metrics(sym, rows, fo, deals, det_days, names, notes):
         "c": rnd(c), "chg": rnd(chg), "v": whole(vol[-1]), "to": rnd(r["tl"] / 100 if r["tl"] else None),
         "nt": whole(r["nt"]), "dq": whole(dq[-1]), "dp": rnd(dp[-1]),
         "dp5": rnd(avg(dp[-5:])), "dp10": rnd(avg(dp[-10:])), "dp20": rnd(avg(dp[-20:])),
-        "dpp": rnd(dp_prior), "dpd": rnd(dpd), "dq5": whole(avg(dq[-5:])), "dqx": rnd(dqx),
+        "dpp": rnd(dp_prior), "dpd": rnd(dpd), "dq5": whole(avg(dq[-5:])),
+        "dqp": whole(dq_prior), "dqx": rnd(dqx),  # dqx is today's delivered qty ÷ dqp (previous 5 sessions)
         "v20": whole(v_prior), "vx": rnd(vx), "ats": whole(ats[-1]), "atsx": rnd(atsx),
         "sma20": rnd(sma20), "hi10": rnd(hi10), "acc": acc, "dist": dist,
         "oi": whole(oi), "oic": rnd(oic), "bu": bu,
