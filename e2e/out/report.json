@@ -1,0 +1,138 @@
+[
+ {
+  "scenario": "1-live-390-light",
+  "width": 390,
+  "dark": false,
+  "blocked": [],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "path": "global/scan",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   }
+  ],
+  "errors": [],
+  "seconds_to_quotes": 0.4,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live · 12:32:05 am · crude 10 min late\nRefresh\nGIFT Nifty · Nov\n24,341.5\n+581.5 (+2.45%)\nBrent · Jan\n$94.82\n−8.78 (−8.47%)\nWTI 88.18 −8.2%\nUSD/INR\n94.63\n−0.10 (−0.11%)\nMCX Gold · Dec\n₹1,43,234/10 g\n+3,782 (+2.71%)\nMCX Silver · Dec\n₹1,87,735/kg\n+8,037 (+4.47%)\n\nHigher start indicated: GIFT Nov is 371 points (1.55%) above the Nifty Nov futures close of 23,971.",
+  "tiles": [
+   "GIFT Nifty · Nov: 24,341.5, +581.5 (+2.45%), trading",
+   "Brent · Jan: $94.82, −8.78 (−8.47%), trading",
+   "USD/INR: 94.63, −0.10 (−0.11%), trading",
+   "MCX Gold · Dec: ₹1,43,234 per 10 grams, +3,782 (+2.71%), closed",
+   "MCX Silver · Dec: ₹1,87,735 per kg, +8,037 (+4.47%), closed"
+  ],
+  "clipped": [],
+  "page_hscroll": false,
+  "regime_text": "Amber: MTF up to 1.5×\n\nNifty is below its 200-day average\nNifty 50\n23,961\n+0.63%\nvs 50-DMA\n+3.2%\nIndia VIX\n15.19\n−3.40%\nFII fut long\n14%\nnet −1.86 L\nFII activity cash in ₹ cr · F&O in contracts\nDay\tCash\tIndex fut\tCalls\tPuts\n4 Nov\t+7,284\t+16.8k\t−33.8k\t−18.9k\n3 Nov*\t+6,837\t+30.4k\t+16.0k\t−105k\n2 Nov\t+3,115\t+7.6k\t+36.6k\t+28.9k\n30 Oct\t+3,599\t−2.7k\t−17.3k\t+60.7k\n29 Oct\t−944\t−3.0k\t+91.4k\t−40.0k\n28 Oct\t+872\t−14.0k\t−21.8k\t−73.0k\n\nLeaning bullish: FIIs bought ₹7,284 cr (4th straight day) and covered 15.1k futures shorts; options lean bearish by 14.9k contracts. Futures are 86% short, so short covering can fuel rallies.\n\nF&O columns: the day's change in FIIs' net contracts (long − short). Green is bullish for Nifty, so falling puts are green. * Nifty weekly expiry: option changes include expired contracts.",
+  "regime_clipped": [],
+  "table_scrolls": false,
+  "tv_calls": 1
+ },
+ {
+  "scenario": "2-live-390-dark",
+  "width": 390,
+  "dark": true,
+  "blocked": [],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "path": "global/scan",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   }
+  ],
+  "errors": [],
+  "seconds_to_quotes": 0.3,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live · 12:32:08 am · crude 10 min late\nRefresh\nGIFT Nifty · Nov\n24,341.5\n+581.5 (+2.45%)\nBrent · Jan\n$94.78\n−8.82 (−8.51%)\nWTI 88.15 −8.3%\nUSD/INR\n94.63\n−0.10 (−0.11%)\nMCX Gold · Dec\n₹1,43,234/10 g\n+3,782 (+2.71%)\nMCX Silver · Dec\n₹1,87,735/kg\n+8,037 (+4.47%)\n\nHigher start indicated: GIFT Nov is 371 points (1.55%) above the Nifty Nov futures close of 23,971.",
+  "tiles": [
+   "GIFT Nifty · Nov: 24,341.5, +581.5 (+2.45%), trading",
+   "Brent · Jan: $94.78, −8.82 (−8.51%), trading",
+   "USD/INR: 94.63, −0.10 (−0.11%), trading",
+   "MCX Gold · Dec: ₹1,43,234 per 10 grams, +3,782 (+2.71%), closed",
+   "MCX Silver · Dec: ₹1,87,735 per kg, +8,037 (+4.47%), closed"
+  ],
+  "clipped": [],
+  "page_hscroll": false,
+  "regime_text": "Amber: MTF up to 1.5×\n\nNifty is below its 200-day average\nNifty 50\n23,961\n+0.63%\nvs 50-DMA\n+3.2%\nIndia VIX\n15.19\n−3.40%\nFII fut long\n14%\nnet −1.86 L\nFII activity cash in ₹ cr · F&O in contracts\nDay\tCash\tIndex fut\tCalls\tPuts\n4 Nov\t+7,284\t+16.8k\t−33.8k\t−18.9k\n3 Nov*\t+6,837\t+30.4k\t+16.0k\t−105k\n2 Nov\t+3,115\t+7.6k\t+36.6k\t+28.9k\n30 Oct\t+3,599\t−2.7k\t−17.3k\t+60.7k\n29 Oct\t−944\t−3.0k\t+91.4k\t−40.0k\n28 Oct\t+872\t−14.0k\t−21.8k\t−73.0k\n\nLeaning bullish: FIIs bought ₹7,284 cr (4th straight day) and covered 15.1k futures shorts; options lean bearish by 14.9k contracts. Futures are 86% short, so short covering can fuel rallies.\n\nF&O columns: the day's change in FIIs' net contracts (long − short). Green is bullish for Nifty, so falling puts are green. * Nifty weekly expiry: option changes include expired contracts.",
+  "regime_clipped": [],
+  "table_scrolls": false,
+  "tv_calls": 1
+ },
+ {
+  "scenario": "3-live-360",
+  "width": 360,
+  "dark": false,
+  "blocked": [],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "path": "global/scan",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   }
+  ],
+  "errors": [],
+  "seconds_to_quotes": 0.3,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live · 12:32:11 am · crude 10 min late\nRefresh\nGIFT Nifty · Nov\n24,341.5\n+581.5 (+2.45%)\nBrent · Jan\n$94.78\n−8.82 (−8.51%)\nWTI 88.15 −8.3%\nUSD/INR\n94.63\n−0.10 (−0.11%)\nMCX Gold · Dec\n₹1,43,234/10 g\n+3,782 (+2.71%)\nMCX Silver · Dec\n₹1,87,735/kg\n+8,037 (+4.47%)\n\nHigher start indicated: GIFT Nov is 371 points (1.55%) above the Nifty Nov futures close of 23,971.",
+  "tiles": [
+   "GIFT Nifty · Nov: 24,341.5, +581.5 (+2.45%), trading",
+   "Brent · Jan: $94.78, −8.82 (−8.51%), trading",
+   "USD/INR: 94.63, −0.10 (−0.11%), trading",
+   "MCX Gold · Dec: ₹1,43,234 per 10 grams, +3,782 (+2.71%), closed",
+   "MCX Silver · Dec: ₹1,87,735 per kg, +8,037 (+4.47%), closed"
+  ],
+  "clipped": [],
+  "page_hscroll": false,
+  "regime_text": "Amber: MTF up to 1.5×\n\nNifty is below its 200-day average\nNifty 50\n23,961\n+0.63%\nvs 50-DMA\n+3.2%\nIndia VIX\n15.19\n−3.40%\nFII fut long\n14%\nnet −1.86 L\nFII activity cash in ₹ cr · F&O in contracts\nDay\tCash\tIndex fut\tCalls\tPuts\n4 Nov\t+7,284\t+16.8k\t−33.8k\t−18.9k\n3 Nov*\t+6,837\t+30.4k\t+16.0k\t−105k\n2 Nov\t+3,115\t+7.6k\t+36.6k\t+28.9k\n30 Oct\t+3,599\t−2.7k\t−17.3k\t+60.7k\n29 Oct\t−944\t−3.0k\t+91.4k\t−40.0k\n28 Oct\t+872\t−14.0k\t−21.8k\t−73.0k\n\nLeaning bullish: FIIs bought ₹7,284 cr (4th straight day) and covered 15.1k futures shorts; options lean bearish by 14.9k contracts. Futures are 86% short, so short covering can fuel rallies.\n\nF&O columns: the day's change in FIIs' net contracts (long − short). Green is bullish for Nifty, so falling puts are green. * Nifty weekly expiry: option changes include expired contracts.",
+  "regime_clipped": [],
+  "table_scrolls": false,
+  "tv_calls": 1
+ },
+ {
+  "scenario": "4-live-412",
+  "width": 412,
+  "dark": false,
+  "blocked": [],
+  "requests": [
+   {
+    "host": "scanner.tradingview.com",
+    "path": "global/scan",
+    "status": 200,
+    "acao": "https://raviteja2455.github.io"
+   }
+  ],
+  "errors": [],
+  "seconds_to_quotes": 0.3,
+  "fonts": {
+   "barlow": true,
+   "semi": true
+  },
+  "text": "Live · 12:32:14 am · crude 10 min late\nRefresh\nGIFT Nifty · Nov\n24,341.5\n+581.5 (+2.45%)\nBrent · Jan\n$94.78\n−8.82 (−8.51%)\nWTI 88.15 −8.3%\nUSD/INR\n94.63\n−0.10 (−0.11%)\nMCX Gold · Dec\n₹1,43,234/10 g\n+3,782 (+2.71%)\nMCX Silver · Dec\n₹1,87,735/kg\n+8,037 (+4.47%)\n\nHigher start indicated: GIFT Nov is 371 points (1.55%) above the Nifty Nov futures close of 23,971.",
+  "tiles": [
+   "GIFT Nifty · Nov: 24,341.5, +581.5 (+2.45%), trading",
+   "Brent · Jan: $94.78, −8.82 (−8.51%), trading",
+   "USD/INR: 94.63, −0.10 (−0.11%), trading",
+   "MCX Gold · Dec: ₹1,43,234 per 10 grams, +3,782 (+2.71%), closed",
+   "MCX Silver · Dec: ₹1,87,735 per kg, +8,037 (+4.47%), closed"
+  ],
+  "clipped": [],
+  "page_hscroll": false,
+  "regime_text": "Amber: MTF up to 1.5×\n\nNifty is below its 200-day average\nNifty 50\n23,961\n+0.63%\nvs 50-DMA\n+3.2%\nIndia VIX\n15.19\n−3.40%\nFII fut long\n14%\nnet −1.86 L\nFII activity cash in ₹ cr · F&O in contracts\nDay\tCash\tIndex fut\tCalls\tPuts\n4 Nov\t+7,284\t+16.8k\t−33.8k\t−18.9k\n3 Nov*\t+6,837\t+30.4k\t+16.0k\t−105k\n2 Nov\t+3,115\t+7.6k\t+36.6k\t+28.9k\n30 Oct\t+3,599\t−2.7k\t−17.3k\t+60.7k\n29 Oct\t−944\t−3.0k\t+91.4k\t−40.0k\n28 Oct\t+872\t−14.0k\t−21.8k\t−73.0k\n\nLeaning bullish: FIIs bought ₹7,284 cr (4th straight day) and covered 15.1k futures shorts; options lean bearish by 14.9k contracts. Futures are 86% short, so short covering can fuel rallies.\n\nF&O columns: the day's change in FIIs' net contracts (long − short). Green is bullish for Nifty, so falling puts are green. * Nifty weekly expiry: option changes include expired contracts.",
+  "regime_clipped": [],
+  "table_scrolls": false,
+  "tv_calls": 1
+ }
+]
