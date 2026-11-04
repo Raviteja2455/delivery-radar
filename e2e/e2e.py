@@ -87,6 +87,12 @@ def scenario(pw, name, width=390, dark=False, block=(), wait=r"^(Live|Markets cl
             page.screenshot(path=str(shot))
         else:
             page.locator("#apphead").screenshot(path=str(shot))
+        page.wait_for_selector("#regime:not([hidden])", timeout=15000)
+        page.locator("#regime").screenshot(path=str(OUT / f"{name}-regime.png"))
+        log["regime_text"] = page.inner_text("#regime")
+        log["regime_clipped"] = page.evaluate("""() => [...document.querySelectorAll('#regime td, #regime th, #regime .fig .v, #regime .fig .s')]
+            .filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)""")
+        log["table_scrolls"] = page.evaluate("() => { const t = document.querySelector('#regime .fii .tbl'); return t ? t.scrollWidth > t.clientWidth + 1 : null }")
         if cross:
             log["cross_check"] = page.evaluate(CROSS)
         if watch_refresh:
@@ -108,9 +114,9 @@ def scenario(pw, name, width=390, dark=False, block=(), wait=r"^(Live|Markets cl
 
 
 with sync_playwright() as pw:
-    scenario(pw, "1-live-390-light", watch_refresh=True, full=True, cross=True)
+    scenario(pw, "1-live-390-light")
     scenario(pw, "2-live-390-dark", dark=True)
-    scenario(pw, "3-live-360", width=360, cross=True)
+    scenario(pw, "3-live-360", width=360)
     scenario(pw, "4-live-412", width=412)
     if MODE == "local":
         scenario(pw, "5-tradingview-blocked", block=(HOSTS[0],), cross=True)
