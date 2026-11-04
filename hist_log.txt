@@ -1,0 +1,36 @@
+symbols 58 ['ADANIENT', 'ADANIPORTS', 'APOLLOHOSP', 'ASIANPAINT', 'AXISBANK', 'BAJAJ-AUTO', 'BAJAJFINSV', 'BAJFINANCE', 'BEL', 'BHARTIARTL', 'BPCL', 'BRITANNIA', 'BSE', 'CIPLA', 'COALINDIA', 'DIVISLAB', 'DRREDDY', 'EICHERMOT', 'ETERNAL', 'GRASIM', 'HCLTECH', 'HDFCBANK', 'HDFCLIFE', 'HEROMOTOCO', 'HINDALCO', 'HINDUNILVR', 'ICICIBANK', 'INDIGO', 'INDUSINDBK', 'INFY', 'ITC', 'JIOFIN', 'JSWSTEEL', 'KOTAKBANK', 'LT', 'LTIM', 'M&M', 'MARUTI', 'MAXHEALTH', 'NESTLEIND', 'NTPC', 'ONGC', 'POWERGRID', 'RELIANCE', 'SBILIFE', 'SBIN', 'SHRIRAMFIN', 'SUNPHARMA', 'TATACONSUM', 'TATAMOTORS', 'TATASTEEL', 'TCS', 'TECHM', 'TITAN', 'TMPV', 'TRENT', 'ULTRACEMCO', 'UPL']
+0/608 2024-07-08 eq=True fo=True part=True t=1s
+eq date mismatch 2024-07-17 16-Jul-2024
+eq date mismatch 2024-08-15 14-Aug-2024
+50/608 2024-09-16 eq=True fo=True part=True t=20s
+eq date mismatch 2024-10-02 01-Oct-2024
+eq date mismatch 2024-11-20 19-Nov-2024
+100/608 2024-11-25 eq=True fo=True part=True t=39s
+eq date mismatch 2024-12-25 24-Dec-2024
+150/608 2025-02-03 eq=True fo=True part=True t=61s
+200/608 2025-04-14 eq=False fo=False part=False t=80s
+250/608 2025-06-23 eq=True fo=True part=True t=96s
+300/608 2025-09-01 eq=True fo=True part=True t=115s
+eq date mismatch 2025-10-22 21-Oct-2025
+eq date mismatch 2025-11-05 04-Nov-2025
+350/608 2025-11-10 eq=True fo=True part=True t=133s
+eq date mismatch 2025-12-25 24-Dec-2025
+eq date mismatch 2026-01-15 14-Jan-2026
+400/608 2026-01-19 eq=True fo=True part=True t=151s
+eq date mismatch 2026-01-26 23-Jan-2026
+eq date mismatch 2026-03-03 02-Mar-2026
+eq date mismatch 2026-03-26 25-Mar-2026
+eq date mismatch 2026-03-31 30-Mar-2026
+eq date mismatch 2026-04-03 02-Apr-2026
+450/608 2026-03-30 eq=True fo=True part=True t=172s
+eq date mismatch 2026-04-14 13-Apr-2026
+eq date mismatch 2026-05-01 30-Apr-2026
+eq date mismatch 2026-05-28 27-May-2026
+500/608 2026-06-08 eq=True fo=True part=True t=190s
+eq date mismatch 2026-06-26 25-Jun-2026
+550/608 2026-08-17 eq=True fo=True part=True t=208s
+eq date mismatch 2026-09-14 11-Sep-2026
+eq date mismatch 2026-10-02 01-Oct-2026
+eq date mismatch 2026-10-20 19-Oct-2026
+600/608 2026-10-26 eq=True fo=True part=True t=225s
+done 576 sessions 228s
