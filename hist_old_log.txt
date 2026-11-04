@@ -1,0 +1,99 @@
+symbols 65 ['ADANIENT', 'ADANIPORTS', 'APOLLOHOSP', 'ASIANPAINT', 'AXISBANK', 'BAJAJ-AUTO', 'BAJAJFINSV', 'BAJFINANCE', 'BEL', 'BHARTIARTL', 'BPCL', 'BRITANNIA', 'BSE', 'CIPLA', 'COALINDIA', 'DIVISLAB', 'DRREDDY', 'EICHERMOT', 'ETERNAL', 'GAIL', 'GRASIM', 'HCLTECH', 'HDFC', 'HDFCBANK', 'HDFCLIFE', 'HEROMOTOCO', 'HINDALCO', 'HINDUNILVR', 'ICICIBANK', 'INDIGO', 'INDUSINDBK', 'INFY', 'IOC', 'ITC', 'JIOFIN', 'JSWSTEEL', 'KOTAKBANK', 'LT', 'LTIM', 'M&M', 'MARUTI', 'MAXHEALTH', 'NESTLEIND', 'NTPC', 'ONGC', 'POWERGRID', 'RELIANCE', 'SBILIFE', 'SBIN', 'SHREECEM', 'SHRIRAMFIN', 'SUNPHARMA', 'TATACONSUM', 'TATAMOTORS', 'TATASTEEL', 'TCS', 'TECHM', 'TITAN', 'TMPV', 'TRENT', 'ULTRACEMCO', 'UPL', 'VEDL', 'YESBANK', 'ZEEL']
+0/1178 2020-01-01 eq=True fo=True part=True t=4s
+eq date mismatch 2020-02-21 20-Feb-2020
+eq date mismatch 2020-03-10 09-Mar-2020
+50/1178 2020-03-11 eq=True fo=True part=True t=31s
+eq date mismatch 2020-04-02 01-Apr-2020
+eq date mismatch 2020-04-06 03-Apr-2020
+eq date mismatch 2020-04-10 09-Apr-2020
+eq date mismatch 2020-05-01 30-Apr-2020
+eq date mismatch 2020-05-25 22-May-2020
+100/1178 2020-05-20 eq=True fo=True part=True t=59s
+150/1178 2020-07-29 eq=True fo=True part=True t=87s
+eq date mismatch 2020-10-02 01-Oct-2020
+200/1178 2020-10-07 eq=True fo=True part=True t=117s
+eq date mismatch 2020-11-16 14-Nov-2020
+eq date mismatch 2020-11-30 27-Nov-2020
+250/1178 2020-12-16 eq=True fo=True part=True t=139s
+eq date mismatch 2020-12-25 24-Dec-2020
+eq date mismatch 2021-01-26 25-Jan-2021
+300/1178 2021-02-24 eq=True fo=True part=True t=166s
+eq date mismatch 2021-03-11 10-Mar-2021
+eq date mismatch 2021-03-29 26-Mar-2021
+eq date mismatch 2021-04-02 01-Apr-2021
+eq date mismatch 2021-04-14 13-Apr-2021
+eq date mismatch 2021-04-21 20-Apr-2021
+350/1178 2021-05-05 eq=True fo=True part=True t=198s
+eq date mismatch 2021-05-13 12-May-2021
+400/1178 2021-07-14 eq=True fo=True part=True t=229s
+eq date mismatch 2021-07-21 20-Jul-2021
+eq date mismatch 2021-08-19 18-Aug-2021
+eq date mismatch 2021-09-10 09-Sep-2021
+450/1178 2021-09-22 eq=True fo=True part=True t=265s
+eq date mismatch 2021-10-15 14-Oct-2021
+eq date mismatch 2021-11-04 03-Nov-2021
+eq date mismatch 2021-11-05 04-Nov-2021
+eq date mismatch 2021-11-19 18-Nov-2021
+500/1178 2021-12-01 eq=True fo=True part=True t=300s
+eq date mismatch 2022-01-26 25-Jan-2022
+550/1178 2022-02-09 eq=True fo=True part=True t=337s
+eq date mismatch 2022-03-01 28-Feb-2022
+eq date mismatch 2022-03-18 17-Mar-2022
+eq date mismatch 2022-04-14 13-Apr-2022
+eq date mismatch 2022-04-15 13-Apr-2022
+600/1178 2022-04-20 eq=True fo=True part=True t=386s
+eq date mismatch 2022-05-03 02-May-2022
+650/1178 2022-06-29 eq=True fo=True part=True t=424s
+ERROR 2022-08-08 Traceback (most recent call last):
+  File "/home/runner/work/delivery-radar/delivery-radar/history.py", line 216, in safe
+    return day(x, symbols)
+           ^^^^^^^^^^^^^^^
+  File "/home/runner/work/delivery-radar/delivery-radar/history.py", line 98, in day
+    for r in rows(t):
+             ^^^^^^^
+  File "/home/runner/work/delivery-radar/delivery-radar/history.py", line 76, in rows
+    for rec in csv.reader(io.StringIO(text)):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_csv.Error: new-line character seen in unquoted field - do you need to open the file with newline=''?
+
+eq date mismatch 2022-08-15 12-Aug-2022
+eq date mismatch 2022-08-31 30-Aug-2022
+700/1178 2022-09-07 eq=True fo=True part=True t=457s
+eq date mismatch 2022-10-05 04-Oct-2022
+eq date mismatch 2022-10-26 25-Oct-2022
+eq date mismatch 2022-11-08 07-Nov-2022
+750/1178 2022-11-16 eq=True fo=True part=True t=495s
+eq date mismatch 2023-01-26 25-Jan-2023
+800/1178 2023-01-25 eq=True fo=True part=True t=528s
+eq date mismatch 2023-03-07 06-Mar-2023
+eq date mismatch 2023-03-30 29-Mar-2023
+eq date mismatch 2023-04-04 03-Apr-2023
+eq date mismatch 2023-04-07 06-Apr-2023
+850/1178 2023-04-05 eq=True fo=True part=True t=559s
+eq date mismatch 2023-04-14 13-Apr-2023
+eq date mismatch 2023-05-01 28-Apr-2023
+900/1178 2023-06-14 eq=True fo=True part=True t=589s
+eq date mismatch 2023-06-29 28-Jun-2023
+eq date mismatch 2023-08-15 14-Aug-2023
+950/1178 2023-08-23 eq=True fo=True part=True t=620s
+eq date mismatch 2023-09-19 18-Sep-2023
+eq date mismatch 2023-10-02 29-Sep-2023
+eq date mismatch 2023-10-24 23-Oct-2023
+1000/1178 2023-11-01 eq=True fo=True part=True t=650s
+eq date mismatch 2023-11-14 13-Nov-2023
+eq date mismatch 2023-11-27 24-Nov-2023
+eq date mismatch 2023-12-25 22-Dec-2023
+1050/1178 2024-01-10 eq=True fo=True part=True t=687s
+eq date mismatch 2024-01-22 20-Jan-2024
+eq date mismatch 2024-01-26 25-Jan-2024
+eq date mismatch 2024-03-08 07-Mar-2024
+1100/1178 2024-03-20 eq=True fo=True part=True t=720s
+eq date mismatch 2024-03-25 22-Mar-2024
+eq date mismatch 2024-03-29 28-Mar-2024
+eq date mismatch 2024-04-11 10-Apr-2024
+eq date mismatch 2024-04-17 16-Apr-2024
+eq date mismatch 2024-05-01 30-Apr-2024
+eq date mismatch 2024-05-20 18-May-2024
+1150/1178 2024-05-29 eq=True fo=True part=True t=744s
+eq date mismatch 2024-06-17 14-Jun-2024
+done 1114 sessions 760s
