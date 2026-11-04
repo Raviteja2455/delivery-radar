@@ -48,6 +48,25 @@ of expiry; the label then changes month and the price shifts by the gap between 
 TradingView's price for a quieter month directly, because those can lag well behind the exchange. The Moneycontrol backup
 asks for the next two contracts and shows the one with more open interest.
 
+## FII activity
+
+Inside the regime band, a table shows what foreign investors (FIIs) did in each of the last six sessions:
+
+| Column | What it shows | Source |
+|---|---|---|
+| Cash | Net buying (+) or selling (−) in ₹ crore | NSE provisional FII/DII figures |
+| Index fut | Change in FIIs' net index-futures contracts (long minus short) | NSE participant-wise open interest |
+| Calls | Change in their net index call contracts | same |
+| Puts | Change in their net index put contracts; a fall is the bullish side | same |
+
+Green marks the side that is bullish for Nifty. Under the table, one line gives the verdict on the latest session: bullish
+or bearish when cash, futures and options all agree, otherwise it leans with the majority. It also says how short or long
+FIIs are in index futures; the tile beside India VIX shows that as "% long". On Nifty's weekly expiry (marked *), the day's
+option changes include contracts that simply expired, so the verdict leaves options out that day.
+
+The participant file only splits open interest by category (FII, DII, Pro, Client); no public NSE file shows individual
+accounts. The regime rule above still uses FIIs' 5-session cash total, as written in the MTF plan.
+
 ## The MTF tab
 
 The MTF tab runs the whole MTF plan on every stock each night and on every trade you log.
@@ -119,5 +138,5 @@ through a local web server (`python -m http.server -d docs`).
 `python tests/make_sample.py sample 2026-10-23` writes made-up files in NSE's exact layouts, and
 `python radar.py update --source-dir sample --today 2026-10-23` runs the whole pipeline offline against them.
 
-Data source: NSE public archives (sec_bhavdata_full, F&O UDiFF bhavcopy, ind_close_all, bulk.csv, block.csv) and the
-NSE provisional FII/DII figures. For information only; not investment advice.
+Data source: NSE public archives (sec_bhavdata_full, F&O UDiFF bhavcopy, ind_close_all, bulk.csv, block.csv,
+fao_participant_oi) and the NSE provisional FII/DII figures. For information only; not investment advice.

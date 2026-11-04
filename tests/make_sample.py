@@ -73,6 +73,11 @@ def main(out, last):
     base_dp = {s: rnd.uniform(30, 62) for s in SYMBOLS}
     oi = {}  # (symbol, expiry) -> OI
     nifty, vix = 24500.0, 14.0
+    # participant OI: index fut long/short, stock fut long/short, index call long, put long, call short, put short
+    part = {"Client": [300000, 60000, 3200000, 270000, 2700000, 2680000, 2610000, 3180000],
+            "DII": [49000, 7000, 300000, 4500000, 14000, 113000, 700, 200],
+            "FII": [35000, 220000, 3600000, 2560000, 658000, 1060000, 880000, 640000],
+            "Pro": [29000, 35000, 690000, 450000, 997000, 1095000, 880000, 1130000]}
     for d in days:
         prev = dict(price)
         rets = {s: rnd.gauss(-0.0004, 0.014) for s in SYMBOLS}
@@ -149,9 +154,31 @@ def main(out, last):
                         "NIFTYFUT", "", "", "", f"{nifty:.2f}", "", "", "", "", "15000000", "250000", "", "", "", "", "", "", "", "", "", ""])
             w.writerow([d.isoformat(), d.isoformat(), "FO", "NSE", "STO", "", "", "ITC", "", e.isoformat(), e.isoformat(), "260", "CE",
                         "ITC260CE", "", "", "", "4.10", "", "", "", "", "900000", "50000", "", "", "", "", "", "", "", "", "", ""])
+        weekly = d + timedelta((1 - d.weekday()) % 7)  # Nifty options expire every Tuesday
+        w.writerow([d.isoformat(), d.isoformat(), "FO", "NSE", "IDO", "", "", "NIFTY", "", weekly.isoformat(), weekly.isoformat(),
+                    "24500", "CE", "NIFTY24500CE", "", "", "", "120.5", "", "", "", "", "650000", "13000", "", "", "", "", "", "", "",
+                    "", "", ""])
         name = f"BhavCopy_NSE_FO_0_0_0_{d:%Y%m%d}_F_0000"
         with zipfile.ZipFile(out / f"{name}.csv.zip", "w", zipfile.ZIP_DEFLATED) as z:
             z.writestr(f"{name}.csv", buf.getvalue())
+
+        # Participant-wise open interest: a title line, then contracts held long and short by each category.
+        for k in part:
+            part[k] = [max(1000, int(v * (1 + rnd.gauss(0, 0.04)))) for v in part[k]]
+        with open(out / f"fao_participant_oi_{d:%d%m%Y}.csv", "w", newline="") as f:
+            f.write(f'""Participant wise Open Interest (no. of contracts) in Equity Derivatives as on {d:%b %d, %Y}"",'
+                    + "," * 13 + "\r\n")
+            f.write("Client Type,Future Index Long,Future Index Short,Future Stock Long,Future Stock Short       ,"
+                    "Option Index Call Long,Option Index Put Long,Option Index Call Short,Option Index Put Short,"
+                    "Option Stock Call Long,Option Stock Put Long,Option Stock Call Short,Option Stock Put Short,"
+                    "Total Long Contracts      ,Total Short Contracts\r\n")
+            total = [0] * 12
+            for k, v in part.items():
+                fl, fs, sl, ss, cl, pl, cs, ps = v
+                cells = [fl, fs, sl, ss, cl, pl, cs, ps, sl // 3, sl // 4, ss // 3, ss // 4]
+                total = [a + b for a, b in zip(total, cells)]
+                f.write(",".join([k] + [str(c) for c in cells] + [str(fl + sl + cl + pl), str(fs + ss + cs + ps)]) + "\r\n")
+            f.write(",".join(["TOTAL"] + [str(c) for c in total] + ["0", "0"]) + "\r\n")
 
     d = days[-1]
     head = ["Date", "Symbol", "Security Name", "Client Name", "Buy/Sell", "Quantity Traded", "Trade Price / Wght. Avg. Price", "Remarks"]

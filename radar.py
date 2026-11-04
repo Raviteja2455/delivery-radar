@@ -6,8 +6,8 @@
   python radar.py build                   rebuild docs/data.json from the stored history only
 
 Data comes from NSE's public end-of-day files: security-wise delivery (sec_bhavdata_full),
-the F&O bhavcopy, index closes, bulk/block deals and the provisional FII/DII figures.
-History is kept as one small JSON file per trading day under data/.
+the F&O bhavcopy, index closes, bulk/block deals, participant-wise F&O open interest and the
+provisional FII/DII figures. History is kept as one small JSON file per trading day under data/.
 """
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ import csv
 import io
 import json
 import math
+import re
 import sys
 import time
 import zipfile
@@ -36,9 +37,16 @@ URLS = {
     "bulk": "https://nsearchives.nseindia.com/content/equities/bulk.csv",
     "block": "https://nsearchives.nseindia.com/content/equities/block.csv",
     "fiidii": "https://www.nseindia.com/api/fiidiiTradeReact",
+    "part": "https://nsearchives.nseindia.com/content/nsccl/fao_participant_oi_{d:%d%m%Y}.csv",
 }
-LOOKBACK = {"eq": 110, "fo": 45, "idx": 300}    # calendar days kept filled (first run backfills this)
-KEEP_DAYS = {"eq": 200, "fo": 90, "idx": 420}   # day files older than this are deleted
+LOOKBACK = {"eq": 110, "fo": 45, "idx": 300, "part": 45}    # calendar days kept filled (first run backfills this)
+KEEP_DAYS = {"eq": 200, "fo": 90, "idx": 420, "part": 200}  # day files older than this are deleted
+FO_FLAG_DAYS = 21  # stored F&O days this recent are fetched again once if they lack the Nifty-expiry flag
+FII_DAYS = 6       # sessions shown in the app's FII table
+# participant-wise OI columns kept, in this order, per category per day
+PART_FIELDS = ("Future Index Long", "Future Index Short", "Option Index Call Long", "Option Index Call Short",
+               "Option Index Put Long", "Option Index Put Short", "Future Stock Long", "Future Stock Short")
+PART_TYPES = ("FII", "DII", "Pro", "Client")
 DETAIL_DAYS = 40                                  # sessions of history shipped per stock
 PAUSE = 0.6                                       # seconds between NSE requests
 HEADERS = {
@@ -213,8 +221,11 @@ def parse_fo(blob, symbols):
     with zipfile.ZipFile(io.BytesIO(blob)) as z:
         name = next(n for n in z.namelist() if n.lower().endswith(".csv"))
         text = z.read(name).decode("utf-8-sig", errors="replace")
-    by_sym, day = {}, None
+    by_sym, day, nifty_expiry = {}, None, 0
     for r in csv_rows(text):
+        if (r.get("FinInstrmTp") == "IDO" and r.get("TckrSymb") == "NIFTY"
+                and r.get("XpryDt") and r.get("XpryDt") == r.get("TradDt")):
+            nifty_expiry = 1
         if r.get("FinInstrmTp") != "STF" or r.get("TckrSymb") not in symbols:
             continue
         day = day or parse_date(r.get("TradDt"))
@@ -232,6 +243,32 @@ def parse_fo(blob, symbols):
             "fc": num(near.get("ClsPric")),
             "x": 1 if expiring else 0,  # expiry day: OI change is distorted by roll-over
         }
+    # Nifty options expired today (weekly expiry), so the day's option open interest lost the expiring series.
+    out["_nx"] = nifty_expiry
+    return day, out
+
+
+def parse_part(text):
+    """Participant-wise open interest: contracts held long and short by FIIs, DIIs, Pros and Clients."""
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    start = next((i for i, ln in enumerate(lines) if ln.lstrip('"').lower().startswith("client type")), None)
+    if start is None:
+        return None, {}
+    m = re.search(r"as on\s+([A-Za-z]{3,9}\s+\d{1,2},\s*\d{4})", " ".join(lines[:start]))
+    day = None
+    if m:
+        for f in ("%b %d, %Y", "%B %d, %Y", "%b %d,%Y"):
+            try:
+                day = datetime.strptime(m.group(1), f).date()
+                break
+            except ValueError:
+                pass
+    out = {}
+    for r in csv_rows("\n".join(lines[start:])):
+        kind = r.get("Client Type")
+        vals = [num(r.get(k)) for k in PART_FIELDS]
+        if kind in PART_TYPES and all(v is not None for v in vals):
+            out[kind] = [int(v) for v in vals]
     return day, out
 
 
@@ -313,9 +350,9 @@ def update(src, today=None):
     uset = set(universe)
 
     missing = {k: set(v) for k, v in meta.get("missing", {}).items()}
-    for k in ("eq", "fo", "idx"):
+    for k in ("eq", "fo", "idx", "part"):
         missing.setdefault(k, set())
-    fetched = {"eq": 0, "idx": 0, "fo": 0}
+    fetched = {"eq": 0, "idx": 0, "fo": 0, "part": 0}
 
     # Earlier versions saved those holiday copies as trading days; drop any still stored.
     stored = {p.stem: jload(p, {}).get("rows", {}) for p in (DATA / "eq").glob("*.json")}
@@ -324,15 +361,20 @@ def update(src, today=None):
         missing["eq"].add(iso)
         print(f"Removed eq {iso}: it repeated the previous session's file, so it was a holiday")
 
-    for kind in ("eq", "idx", "fo"):  # eq first: it tells us which weekdays were holidays
+    for kind in ("eq", "idx", "fo", "part"):  # eq first: it tells us which weekdays were holidays
         for d in weekdays(today - timedelta(days=LOOKBACK[kind]), today):
             iso = d.isoformat()
             if iso in missing[kind] or (kind != "eq" and iso in missing["eq"]):
                 continue
             path = DATA / kind / f"{iso}.json"
             if path.exists():
-                if kind != "eq" or uset <= set(jload(path, {}).get("u", [])):
-                    continue  # already have it (eq files are re-fetched only when new symbols are added)
+                stored = jload(path, {})
+                if kind == "eq" and not uset <= set(stored.get("u", [])):
+                    pass  # fetch again: symbols were added since this day was saved
+                elif kind == "fo" and "_nx" not in stored and d >= today - timedelta(days=FO_FLAG_DAYS):
+                    pass  # fetch again once to record whether Nifty options expired that day
+                else:
+                    continue
             blob = src.get(URLS[kind].format(d=d), binary=(kind == "fo"))
             if blob is None:
                 if d < today - timedelta(days=3):  # NSE publishes the same evening; older gaps are holidays
@@ -342,6 +384,8 @@ def update(src, today=None):
                 day, rows = parse_eq(blob, uset)
             elif kind == "fo":
                 day, rows = parse_fo(blob, uset)
+            elif kind == "part":
+                day, rows = parse_part(blob)
             else:
                 day, rows = parse_idx(blob)
             if day and day != d:
@@ -607,7 +651,6 @@ def market_summary(idx, flows, stocks, asof):
         "nifty": rnd(nifty), "nifty_chg": rnd(last.get("nifty_chg")), "vix": rnd(vix),
         "vix_chg": rnd(last.get("vix_chg")), "dma50": rnd(dma50), "dma200": rnd(dma200),
         "fii": rnd(flows.get(asof, {}).get("fii")), "dii": rnd(flows.get(asof, {}).get("dii")),
-        "fii5": rnd(fii5), "dii5": rnd(dii5), "flow_days": len(fdays),
         "regime": regime, "reasons": reasons,
         "adv": len(up), "dec": len(down),
         "dp": rnd(avg([s["dp"] for s in stocks])), "dpp": rnd(avg([s["dpp"] for s in stocks])),
@@ -615,6 +658,120 @@ def market_summary(idx, flows, stocks, asof):
         "long": sum(1 for s in stocks if s["bu"] == "Long buildup"),
         "short": sum(1 for s in stocks if s["bu"] == "Short buildup"),
     }
+
+
+def fii_net(row):
+    """FII net contracts (long minus short) from a stored participant row."""
+    fl, fs, cl, cs, pl, ps = row[:6]
+    return {"fut": fl - fs, "calls": cl - cs, "puts": pl - ps, "fl": fl, "fs": fs,
+            "long": rnd(fl / (fl + fs) * 100, 1) if fl + fs else None}
+
+
+def kfmt(x):
+    """Contracts in thousands for the summary sentence: 16,778 -> 16.8k, 1,04,657 -> 105k."""
+    a = abs(x) / 1000
+    return f"{a:.0f}k" if a >= 100 else f"{a:.1f}k"
+
+
+def crore(x):
+    """Rupee crores with Indian digit grouping: 72840 -> 72,840; 123456 -> 1,23,456."""
+    s = str(int(round(abs(x))))
+    if len(s) > 3:
+        head, tail = s[:-3], s[-3:]
+        head = ",".join(re.findall(r"\d{1,2}", head[::-1]))[::-1] if len(head) > 2 else head
+        s = head + "," + tail
+    return s
+
+
+def fii_activity(days, flows, part, fo, asof):
+    """FII activity by session: net cash bought or sold, and how their index futures, calls and puts changed.
+
+    Changes compare each session's participant-wise open interest with the previous session's, so a day
+    without the previous day's file has no change. On Nifty's weekly expiry the day's option open interest
+    loses the expiring series, which makes that day's call and put changes look larger than the trades were."""
+    sess = [d for d in days if d <= asof]
+    rows = []
+    for i, d in enumerate(sess):
+        cur = part.get(d, {}).get("FII")
+        prev = part.get(sess[i - 1], {}).get("FII") if i else None
+        cash = flows.get(d, {}).get("fii")
+        if cur is None and cash is None:
+            continue
+        row = {"d": d, "cash": rnd(cash, 0), "fut": None, "calls": None, "puts": None,
+               "dl": None, "ds": None, "x": int(bool(fo.get(d, {}).get("_nx")))}
+        if cur and prev:
+            a, b = fii_net(cur), fii_net(prev)
+            row.update({"fut": a["fut"] - b["fut"], "calls": a["calls"] - b["calls"], "puts": a["puts"] - b["puts"],
+                        "dl": a["fl"] - b["fl"], "ds": a["fs"] - b["fs"]})
+        rows.append(row)
+    pos_day = next((d for d in reversed(sess) if part.get(d, {}).get("FII")), None)
+    pos = None
+    if pos_day:
+        n = fii_net(part[pos_day]["FII"])
+        pos = {"d": pos_day, "fut": n["fut"], "long": n["long"], "calls": n["calls"], "puts": n["puts"]}
+    streak = 0
+    if sess and flows.get(sess[-1], {}).get("fii"):
+        sign = flows[sess[-1]]["fii"] > 0
+        for d in reversed(sess):
+            v = flows.get(d, {}).get("fii")
+            if v is None or (v > 0) != sign or v == 0:
+                break
+            streak += 1
+    shown = rows[-FII_DAYS:]
+    view = fii_view(shown[-1], streak, pos) if shown and shown[-1]["d"] == asof else None
+    for r in shown:
+        r.pop("dl"), r.pop("ds")
+    return {"days": shown, "pos": pos, "view": view}
+
+
+def fii_view(r, streak, pos):
+    """One-line verdict on the latest session: cash, index futures and index options, then positioning."""
+    legs, said = [], []
+    if r["cash"] is not None:
+        act = "bought" if r["cash"] > 0 else "sold"
+        run = f" ({streak}{'th' if 10 <= streak % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(streak % 10, 'th')} straight day)" if streak >= 2 else ""
+        said.append(f"{act} ₹{crore(r['cash'])} cr{run}")
+        legs.append(1 if r["cash"] > 0 else -1 if r["cash"] < 0 else 0)
+    if r["fut"] is not None:
+        dl, ds = r["dl"], r["ds"]
+        if r["fut"] > 0:
+            said.append(f"covered {kfmt(ds)} futures shorts" if -ds >= dl else f"added {kfmt(dl)} futures longs")
+        elif r["fut"] < 0:
+            said.append(f"added {kfmt(ds)} futures shorts" if ds >= -dl else f"cut {kfmt(dl)} futures longs")
+        else:
+            said.append("left index futures unchanged")
+        legs.append((r["fut"] > 0) - (r["fut"] < 0))
+    opt = None
+    if r["calls"] is not None and not r["x"]:
+        opt = r["calls"] - r["puts"]  # more net calls, or fewer net puts, is the bullish side
+        legs.append((opt > 0) - (opt < 0))
+    if not legs:
+        return None
+    # All legs agree (at least two of them): a full verdict; otherwise the majority sets the lean.
+    score, n = sum(legs), len(legs)
+    verdict = ("bullish" if n >= 2 and score == n else "bearish" if n >= 2 and score == -n else
+               "lean-bullish" if score > 0 else "lean-bearish" if score < 0 else "neutral")
+    text = "FIIs " + (", ".join(said[:-1]) + " and " + said[-1] if len(said) > 1 else said[0]) if said else ""
+    if opt is not None:
+        lean = "bullish" if opt > 0 else "bearish" if opt < 0 else "neutral"
+        opt_text = f"options lean {lean}" + (f" by {kfmt(opt)} contracts" if opt else "")
+        text = f"{text}; {opt_text}" if text else opt_text[0].upper() + opt_text[1:]
+    elif r["x"] and r["calls"] is not None:
+        text += "; options skipped (weekly expiry)"
+    text += "."
+    if pos and pos["long"] is not None:
+        lg = pos["long"]
+        if lg < 20:
+            text += f" Futures are {100 - lg:.0f}% short, so short covering can fuel rallies."
+        elif lg > 80:
+            text += f" Futures are {lg:.0f}% long, so long unwinding can deepen falls."
+        elif lg < 40:
+            text += f" Futures lean short ({100 - lg:.0f}% short)."
+        elif lg > 60:
+            text += f" Futures lean long ({lg:.0f}% long)."
+        else:
+            text += f" Futures are balanced ({lg:.0f}% long)."
+    return {"verdict": verdict, "text": text}
 
 
 def build():
@@ -631,6 +788,7 @@ def build():
     idx = {p.stem: jload(p, {}) for p in (DATA / "idx").glob("*.json")}
     deals = jload(DATA / "deals.json", [])
     flows = jload(DATA / "fiidii.json", {})
+    part = {p.stem: jload(p, {}) for p in (DATA / "part").glob("*.json")}
     asof = days[-1]
     det_days = days[-DETAIL_DAYS:]
 
@@ -648,9 +806,10 @@ def build():
         "dates": det_days,
         "signals": SIGNALS,
         "market": market_summary(idx, flows, stocks, asof),
+        "fii": fii_activity(days, flows, part, fo, asof),
         "stocks": stocks,
         "deals": [x for x in deals if x["d"] >= det_days[0]][-80:],
-        "have": {"fo": asof in fo, "idx": asof in idx, "flows": asof in flows},
+        "have": {"fo": asof in fo, "idx": asof in idx, "flows": asof in flows, "part": "FII" in part.get(asof, {})},
         "mtf": {"stop_buffer_pct": STOP_BUFFER * 100, "min_stop_pct": MIN_STOP_PCT},
         "extra": [s for s in cfg["extra_symbols"] if s not in set(meta.get("nifty50", []))],
     }

@@ -61,6 +61,20 @@ h1 { font: 700 30px/1 var(--font-c); letter-spacing: -0.015em; margin: 10px 0 6p
 .fig .k { font-size: 12.5px; color: var(--ink-2); }
 .fig .v { font: 600 17px/1.15 var(--font-c); white-space: nowrap; }
 .fig .s { font-size: 12.5px; }
+/* FII activity, inside the regime band */
+.fii { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rule); }
+.fii h3 { font: 600 15px/1.2 var(--font-c); margin: 0 0 6px; }
+.fii h3 span { font: 400 12.5px var(--font); color: var(--ink-2); }
+.fii table { font-size: 13px; }
+.fii th { padding-bottom: 4px; }
+.fii td { padding: 5px 0 5px 6px; font-size: 14px; }
+.fii th:first-child, .fii td:first-child { text-align: left; padding-left: 0; }
+.fii td:first-child { font-family: var(--font); font-size: 13.5px; color: var(--ink-2); }
+.fii td:first-child sup { font-size: 11px; margin-left: 1px; }
+.fii-v { margin: 10px 0 0; font-size: 14px; line-height: 1.45; }
+.fii-v b { font-weight: 600; }
+.fii-v b.flat { color: var(--amber); }
+.fii .note { font-size: 12.5px; margin-top: 6px; }
 .market { margin: 0 0 14px; color: var(--ink-2); font-size: 14px; }
 .market b { color: var(--ink); font-weight: 500; }
 
@@ -259,6 +273,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         <ol id="sig-help"></ol>
         <p>The live strip shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR, with MCX gold (₹ per 10 g) and silver (₹ per kg) below, refreshed every 20 seconds while the app is open. A green dot means that market is trading now. GIFT Nifty, USD/INR and MCX are real time; crude runs 10 minutes behind. Each uses its most-traded contract, named after the label. When MCX trading moves to the next month ahead of expiry, the label changes month and the price shifts by the gap between the two contracts. Outside NSE hours the line under the strip compares GIFT Nifty with the close of the Nifty futures for the same month, which is the usual read on how the next session will open.</p>
         <p>The band at the top applies your MTF regime rule: red means cash only, amber allows up to 1.5×, green up to 2×. The MTF tab runs the full entry, sizing and exit rules on every stock.</p>
+        <p>FII activity, inside the band, shows each session's net cash buying or selling by foreign investors (NSE's provisional figure) and how their index futures, calls and puts changed, from NSE's participant-wise open interest. A positive futures or calls number, or a negative puts number, is the bullish side. The verdict under the table weighs the latest day's cash, futures and options: when they all agree it says bullish or bearish, otherwise it leans with the majority. On Nifty's weekly expiry (marked *), option changes include contracts that simply expired. The tile beside VIX shows how much of FIIs' index-futures position is long.</p>
       </div>
     </details>
 
@@ -273,7 +288,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
     <div class="list" id="list"></div>
 
     <footer class="foot">
-      <p>Source: NSE end-of-day files (security-wise delivery, F&amp;O bhavcopy, bulk and block deals, index closes and FII/DII figures). Updated every weekday night.</p>
+      <p>Source: NSE end-of-day files (security-wise delivery, F&amp;O bhavcopy, bulk and block deals, index closes, participant-wise F&amp;O open interest and FII/DII figures). Updated every weekday night.</p>
       <p>Live strip: TradingView quotes (crude delayed 10 minutes), with CNBC and Moneycontrol as backups.</p>
       <p>For information only. Not investment advice.</p>
     </footer>
@@ -442,17 +457,19 @@ td.hi { color: var(--deliv); font-weight: 600; }
     const label = { red: "Red", amber: "Amber", green: "Green" }[m.regime];
     const reg = $("#regime");
     reg.dataset.r = m.regime;
-    const fiiFig = m.fii5 != null
-      ? fig("FII, 5 days", fmt(m.fii5, 0), null, "₹ crore")
+    const pos = DATA.fii && DATA.fii.pos;
+    const fiiFig = pos && pos.long != null
+      ? fig("FII fut long", `${Math.round(pos.long)}%`, null, `net ${lakhs(pos.fut)}`)
       : fig("FII today", m.fii != null ? fmt(m.fii, 0) : "n/a", null, m.fii != null ? "₹ crore" : null);
-    reg.replaceChildren(
+    reg.replaceChildren(...[
       h("p", { class: "verdict" }, h("b", { text: label }), `: ${verdicts[m.regime]}`),
       h("ul", { class: "why" }, m.reasons.map((r) => h("li", { text: r }))),
       h("div", { class: "figs" },
         fig("Nifty 50", fmt(m.nifty, 0), m.nifty_chg),
         fig("vs 50-DMA", m.dma50 ? signed((m.nifty / m.dma50 - 1) * 100, 1) : "n/a", null),
         fig("India VIX", fmt(m.vix, 2), m.vix_chg),
-        fiiFig));
+        fiiFig),
+      fiiBlock(DATA.fii)].filter(Boolean));
     reg.hidden = false;
 
     const fo = DATA.have.fo ? "" : " Today's F&O file isn't in yet, so futures buildup is blank.";
@@ -464,6 +481,39 @@ td.hi { color: var(--deliv); font-weight: 600; }
   function fig(k, v, chg, note) {
     return h("div", { class: "fig" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }),
       chg != null ? h("div", { class: "s " + dir(chg), text: signed(chg) }) : note ? h("div", { class: "s", text: note }) : null);
+  }
+  // Contracts in lakh, e.g. −1,85,979 → "−1.86 L"; and in thousands with a sign, e.g. 16,778 → "+16.8k".
+  const lakhs = (x) => x == null ? "–" : (x < 0 ? MINUS : "") + (Math.abs(x) / 1e5).toFixed(2) + " L";
+  const kc = (x) => {
+    if (x == null) return "–";
+    const a = Math.abs(x) / 1000;
+    return (x > 0 ? "+" : x < 0 ? MINUS : "") + (a >= 100 ? a.toFixed(0) : a.toFixed(1)) + "k";
+  };
+  // FII activity by day: net cash, and the change in their net index futures, calls and puts, latest first.
+  function fiiBlock(F) {
+    if (!F || !F.days || !F.days.length) return null;
+    const tone = (x, invert) => (x == null || x === 0 ? null : (x > 0) !== !!invert ? "up" : "down");
+    const cash = (x) => (x == null ? "–" : (x > 0 ? "+" : x < 0 ? MINUS : "") + fmt(Math.abs(x), 0));
+    const rows = [...F.days].reverse().map((r) => h("tr", {},
+      h("td", {}, dt(r.d, { day: "numeric", month: "short" }), r.x ? h("sup", { text: "*" }) : null),
+      h("td", { class: tone(r.cash), text: cash(r.cash) }),
+      h("td", { class: tone(r.fut), text: kc(r.fut) }),
+      h("td", { class: tone(r.calls), text: kc(r.calls) }),
+      h("td", { class: tone(r.puts, true), text: kc(r.puts) })));
+    const V = F.view;
+    const words = { bullish: "Bullish", "lean-bullish": "Leaning bullish", neutral: "Neutral",
+      "lean-bearish": "Leaning bearish", bearish: "Bearish" };
+    const vTone = V && (V.verdict.endsWith("bullish") ? "up" : V.verdict.endsWith("bearish") ? "down" : "flat");
+    const expiry = F.days.some((r) => r.x);
+    return h("section", { class: "fii", "aria-label": "FII activity by day" },
+      h("h3", {}, "FII activity ", h("span", { text: "cash in ₹ cr · F&O in contracts" })),
+      h("div", { class: "tbl" }, h("table", {},
+        h("thead", {}, h("tr", {}, ["Day", "Cash", "Index fut", "Calls", "Puts"].map((t) => h("th", { scope: "col", text: t })))),
+        h("tbody", {}, rows))),
+      V ? h("p", { class: "fii-v" }, h("b", { class: vTone, text: `${words[V.verdict] || V.verdict}: ` }), V.text) : null,
+      h("p", { class: "note", text: "F&O columns: the day's change in FIIs' net contracts (long − short). " +
+        "Green is bullish for Nifty, so falling puts are green." +
+        (expiry ? " * Nifty weekly expiry: option changes include expired contracts." : "") }));
   }
   function renderControls() {
     const sel = $("#sort");
