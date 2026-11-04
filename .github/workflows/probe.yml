@@ -1,26 +1,27 @@
-name: Live strip browser test (temporary)
+name: Download NSE history (temporary)
 on:
   push:
     branches: [probe-live-sources]
-    paths: [e2e/e2e.py, e2e/mode.txt, .github/workflows/probe.yml]
+    paths: [history.py, .github/workflows/probe.yml]
 permissions:
   contents: write
 concurrency:
   group: probe
   cancel-in-progress: true
 jobs:
-  e2e:
+  history:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install playwright==1.48.0 && python -m playwright install --with-deps chromium
-      - run: python e2e/e2e.py e2e/docs e2e/out "$(cat e2e/mode.txt)" > e2e/out.log 2>&1 || true
+      - run: pip install requests
+      - run: python history.py 2026-11-04 || true
       - run: |
+          gzip -9 -f hist.json || true
           git config user.name "delivery-radar-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A e2e/out e2e/out.log
-          git commit -m "e2e output" && git push
+          git add hist.json.gz hist_log.txt
+          git commit -m "history output" && git push
