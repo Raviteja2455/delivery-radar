@@ -762,9 +762,11 @@ def fii_view(r, streak, pos):
     if pos and pos["long"] is not None:
         lg = pos["long"]
         if lg < 20:
-            text += f" Futures are {100 - lg:.0f}% short, so short covering can fuel rallies."
+            # FIIs hold heavy index shorts most of the time (largely hedges); in 2024–26 a reading this low followed by
+            # Nifty reclaiming its 20-day average did not lead to above-normal gains, so the text stays descriptive.
+            text += f" Futures are {100 - lg:.0f}% short, which is common for FIIs and not a rally signal by itself."
         elif lg > 80:
-            text += f" Futures are {lg:.0f}% long, so long unwinding can deepen falls."
+            text += f" Futures are {lg:.0f}% long, unusually long for FIIs."
         elif lg < 40:
             text += f" Futures lean short ({100 - lg:.0f}% short)."
         elif lg > 60:

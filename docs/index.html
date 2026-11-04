@@ -256,7 +256,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
     <p class="asof" id="asof">Loading tonight's NSE data…</p>
     <nav class="tabs" aria-label="Views">
       <button class="tab" id="tab-stocks" type="button" aria-selected="true">Stocks</button>
-      <button class="tab" id="tab-mtf" type="button" aria-selected="false">MTF<span class="n" id="mtf-count"></span></button>
+      <button class="tab" id="tab-mtf" type="button" aria-selected="false">Swing<span class="n" id="mtf-count"></span></button>
     </nav>
     <section class="live" id="live" aria-label="Live market cues">
       <div class="live-top"><span class="beat" aria-hidden="true"></span><span class="when">Fetching live quotes…</span></div>
@@ -272,7 +272,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         <p>The score counts six signals:</p>
         <ol id="sig-help"></ol>
         <p>The live strip shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR, with MCX gold (₹ per 10 g) and silver (₹ per kg) below, refreshed every 20 seconds while the app is open. A green dot means that market is trading now. GIFT Nifty, USD/INR and MCX are real time; crude runs 10 minutes behind. Each uses its most-traded contract, named after the label. When MCX trading moves to the next month ahead of expiry, the label changes month and the price shifts by the gap between the two contracts. Outside NSE hours the line under the strip compares GIFT Nifty with the close of the Nifty futures for the same month, which is the usual read on how the next session will open.</p>
-        <p>The band at the top applies your MTF regime rule: red means cash only, amber allows up to 1.5×, green up to 2×. The MTF tab runs the full entry, sizing and exit rules on every stock.</p>
+        <p>The band at the top sets the size of swing trades. All of them are in cash, with no MTF. Green (an uptrend) means half size, because breakouts taken in green markets were flat to losing in the 2020–26 backtests; amber and red mean full size. The Swing tab runs the full entry, sizing and exit rules on every stock and explains the evidence under <i>The rules this tab applies</i>.</p>
         <p>FII activity, inside the band, shows each session's net cash buying or selling by foreign investors (NSE's provisional figure) and how their index futures, calls and puts changed, from NSE's participant-wise open interest. A positive futures or calls number, or a negative puts number, is the bullish side. The verdict under the table weighs the latest day's cash, futures and options: when they all agree it says bullish or bearish, otherwise it leans with the majority. On Nifty's weekly expiry (marked *), option changes include contracts that simply expired. The tile beside VIX shows how much of FIIs' index-futures position is long.</p>
       </div>
     </details>
@@ -355,7 +355,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
 
   const FILTERS = [
     ["all", "All", () => true],
-    ["mtf", "MTF ready", (s) => evaluate(s).status === "ready"],
+    ["mtf", "Swing ready", (s) => evaluate(s).status === "ready"],
     ["score", "Score 4+", (s) => s.score >= 4],
     ["spike", "Delivery spike", (s) => (s.dqx ?? 0) >= 1.5],
     ["long", "Long buildup", (s) => s.bu === "Long buildup"],
@@ -418,7 +418,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         h("span", { text: `5-day ${fmt(st.dp5, 1)}%` }),
         h("span", { text: `Volume ${times(st.vx)}` }),
         buTag(st), dealTag(st),
-        evaluate(st).status === "ready" ? h("span", { class: "tag mtf", text: "MTF ready" }) : null,
+        evaluate(st).status === "ready" ? h("span", { class: "tag mtf", text: "Swing ready" }) : null,
         scoreDots(st)));
   }
   function renderChips() {
@@ -453,7 +453,8 @@ td.hi { color: var(--deliv); font-weight: 600; }
       (when ? ` Refreshed ${when.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" })} IST.` : "");
     $("#sig-help").replaceChildren(...DATA.signals.map((t) => h("li", { text: t })));
 
-    const verdicts = { red: "cash only, no MTF", amber: "MTF up to 1.5×", green: "MTF up to 2×" };
+    const verdicts = { red: "weak market. Swing trades in cash, full size", amber: "mixed market. Swing trades in cash, full size",
+      green: "uptrend. Swing trades in cash, half size" };
     const label = { red: "Red", amber: "Amber", green: "Green" }[m.regime];
     const reg = $("#regime");
     reg.dataset.r = m.regime;
@@ -678,14 +679,23 @@ td.hi { color: var(--deliv); font-weight: 600; }
   }
 
 
-  // ---------------------------------------------------------------- MTF rules (settings and trades stay on this device)
-  const DEFAULTS = { pot: 100000, riskPct: 2, maxLev: 2, maxPos: 4, maxSector: 2, stopMax: 5, minScore: 4,
+  // ---------------------------------------------------------------- swing rules (settings and trades stay on this device)
+  // Plan v2 (Nov 2026): the same entries and exits, in cash. Backtests on Nifty 50 stocks, Apr 2020–Jul 2024 and
+  // Oct 2024–Nov 2026, found MTF leverage turned a small edge into a loss, and that breakouts taken while the market was
+  // green did worst. Saved settings from plan v1 get the new leverage cap once; every other setting is kept.
+  const PLAN = 2;
+  const DEFAULTS = { pot: 100000, riskPct: 2, maxLev: 1, maxPos: 4, maxSector: 2, stopMax: 5, minScore: 4,
     tsDays: 10, tsGain: 3, hardDays: 20, killPct: 10, rate: 0.04, holdings: [] };
   const BOOK_KEY = "dr-mtf";
+  const settingsFrom = (b) => {
+    const s = { ...DEFAULTS, ...(b.settings || {}) };
+    if ((b.plan || 1) < PLAN) s.maxLev = DEFAULTS.maxLev;
+    return s;
+  };
   const book = (() => {
     let b = {};
     try { b = JSON.parse(localStorage.getItem(BOOK_KEY) || "{}") || {}; } catch { b = {}; }
-    return { settings: { ...DEFAULTS, ...(b.settings || {}) },
+    return { plan: PLAN, settings: settingsFrom(b),
       positions: Array.isArray(b.positions) ? b.positions : [],
       closed: Array.isArray(b.closed) ? b.closed : [], killUntil: b.killUntil || null };
   })();
@@ -712,11 +722,12 @@ td.hi { color: var(--deliv); font-weight: 600; }
     const interest = mtf ? funded * S().rate / 100 * Math.max(0, days) : 0;
     return { fixed, interest, total: fixed + interest };
   }
+  // Half size in green; full size in amber and red. Leverage only if you raise the cap: up to 1.5× in amber and red, never in green.
   function mode() {
     const s = S(), r = DATA.market.regime;
     if (book.killUntil && book.killUntil >= DATA.asof) return { key: "kill", lev: 1, factor: 0.5 };
-    if (r === "red") return { key: "red", lev: 1, factor: 0.5 };
-    return { key: r, lev: Math.max(1, Math.min(r === "green" ? 2 : 1.5, s.maxLev)), factor: 1 };
+    if (r === "green") return { key: r, lev: 1, factor: 0.5 };
+    return { key: r, lev: Math.max(1, Math.min(1.5, s.maxLev)), factor: 1 };
   }
   function evaluate(st) {
     const s = S(), open = book.positions;
@@ -733,13 +744,13 @@ td.hi { color: var(--deliv); font-weight: 600; }
       { label: "No negative institutional note", ok: !(st.note && st.note.bias === -1),
         val: st.note ? `${st.note.text}${st.note.as_of ? ` (${shortDate(st.note.as_of)})` : ""}` : "No note on file" },
       { label: "Not already held or traded", ok: !held && !inOpen,
-        val: held ? "It's in your holdings" : inOpen ? "You already have an MTF trade in it" : "Not held" },
+        val: held ? "It's in your holdings" : inOpen ? "You already have a swing trade in it" : "Not held" },
       { label: `A free slot (max ${s.maxPos}, ${s.maxSector} per sector)`, ok: open.length < s.maxPos && inSector < s.maxSector,
         val: `${open.length} of ${s.maxPos} open, ${inSector} in ${st.ind || "this sector"}` },
     ];
     const entryMissing = checks.slice(0, 4).filter((c) => !c.ok).length;
     const personalOk = checks.slice(4).every((c) => c.ok);
-    const why = held ? "you already own it" : inOpen ? "you already have an MTF trade in it"
+    const why = held ? "you already own it" : inOpen ? "you already have a swing trade in it"
       : st.note && st.note.bias === -1 ? "skip, negative institutional note"
       : !checks[6].ok ? "no free slot" : "not a candidate today";
     return { checks, why, status: personalOk && entryMissing === 0 ? "ready" : personalOk && entryMissing === 1 ? "near" : "no" };
@@ -800,7 +811,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
     const cell = (k, v, sub) => h("div", {}, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub ? h("div", { class: "s", text: sub }) : null);
     return h("div", { class: "plan" },
       cell("Buy", `${p.qty} shares`, `near ${rupees(st.c)}, next session`),
-      cell("Position", rupeesShort(p.notional), p.m.lev > 1 ? `yours ${rupeesShort(p.own)}, funded ${rupeesShort(p.funded)}` : "all your own money, no MTF"),
+      cell("Position", rupeesShort(p.notional), p.m.lev > 1 ? `yours ${rupeesShort(p.own)}, funded ${rupeesShort(p.funded)}` : `all your own money${p.m.factor < 1 ? ", half size" : ""}`),
       cell("Stop", rupees(st.stop), `${MINUS}${fmt(st.stopp, 1)}%, on a closing basis`),
       cell("Loss at stop", rupees(p.loss, 0), `${fmt(p.loss / s.pot * 100, 1)}% of your pot`),
       cell(`Day ${s.tsDays} check`, `about ${shortDate(p.day10)}`, `needs ${rupees(p.target)}, +${s.tsGain}%`),
@@ -814,7 +825,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
   function mtfCard(st) {
     const ev = evaluate(st), p = plan(st);
     const title = { ready: "ready for a trade", near: "one rule away", no: ev.why }[ev.status];
-    return h("section", { class: "card" }, h("h3", { text: `MTF check: ${title}` }),
+    return h("section", { class: "card" }, h("h3", { text: `Swing check: ${title}` }),
       ev.status !== "no" && p ? planGrid(st, p) : null,
       h("ul", { class: "checks" }, ev.checks.map(checkItem)),
       ev.status === "ready" ? h("div", { class: "btns" }, h("button", { class: "btn small", type: "button", text: "Log this trade", onclick: () => logTrade(st.s) })) : null);
@@ -822,10 +833,13 @@ td.hi { color: var(--deliv); font-weight: 600; }
   function modeCard(m) {
     const s = S(), pnl = bookPnl(), pct = pnl.total / s.pot * 100;
     const head = { kill: "Kill switch", red: "Red", amber: "Amber", green: "Green" }[m.key];
-    const what = m.lev > 1 ? `MTF up to ${m.lev}×, normal size` : "cash only, no MTF, half size";
+    const size = m.factor < 1 ? "half size" : "full size";
+    const what = m.lev > 1 ? `${size}, MTF up to ${m.lev}× (your leverage setting)` : `cash only, ${size}`;
     const why = m.key === "kill"
-      ? [`Your trades are down ${fmt(-pct, 1)}% of the pot, past the ${s.killPct}% limit. MTF stays off until ${shortDate(book.killUntil)}.`]
-      : DATA.market.reasons;
+      ? [`Your trades are down ${fmt(-pct, 1)}% of the pot, past the ${s.killPct}% limit. Half size, cash only, until ${shortDate(book.killUntil)}.`]
+      : [...DATA.market.reasons, m.key === "green"
+        ? "Half size: in the 2020–26 backtests, breakouts taken in a green market were flat to losing."
+        : "Full size: breakouts that hold up in a weak or mixed market did best in the 2020–26 backtests."];
     return h("section", { class: "regime", "data-r": m.key === "kill" ? "red" : m.key },
       h("p", { class: "verdict" }, h("b", { text: head }), `: ${what}`),
       h("ul", { class: "why" }, why.map((r) => h("li", { text: r }))),
@@ -880,7 +894,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
     return h("div", { style: "margin-top:8px" }, btn, form);
   }
   function positionsCard() {
-    const card = h("section", { class: "card", id: "positions" }, h("h3", { text: `Your MTF trades (${book.positions.length} open)` }));
+    const card = h("section", { class: "card", id: "positions" }, h("h3", { text: `Your swing trades (${book.positions.length} open)` }));
     if (!book.positions.length) card.append(h("p", { class: "note", text: "Nothing logged yet. Log a trade from a ready stock or with the form below." }));
     for (const p of book.positions) {
       const t = track(p);
@@ -898,7 +912,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
     if (book.closed.length) {
       const n = book.closed.length, avgNet = book.closed.reduce((a, c) => a + (c.net || 0), 0) / n;
       card.append(h("p", { class: "note", text: `${n} closed trade${n > 1 ? "s" : ""}, averaging ${rupees(avgNet, 0)} each. ` +
-        (n >= 10 && avgNet > 0 ? "Scale-up rule met: the pot can go to ₹2 lakh, still at 2× or less." : "The scale-up rule needs 10 closed trades with a positive average.") }));
+        (n >= 10 && avgNet > 0 ? "Scale-up rule met: the pot can go to ₹2 lakh, still in cash." : "The scale-up rule needs 10 closed trades with a positive average.") }));
     }
     return card;
   }
@@ -941,7 +955,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
   function settingsCard() {
     const s = S();
     const fields = [
-      ["pot", "Pot, your money (₹)", 1000], ["riskPct", "Risk per trade, % of pot", 0.1], ["maxLev", "Leverage cap (×)", 0.5],
+      ["pot", "Pot, your money (₹)", 1000], ["riskPct", "Risk per trade, % of pot", 0.1], ["maxLev", "Leverage cap (×), 1 = cash", 0.5],
       ["maxPos", "Most open trades", 1], ["maxSector", "Most per sector", 1], ["stopMax", "Widest stop, %", 0.5],
       ["minScore", "Lowest footprint score", 1], ["tsDays", "Time check at day", 1], ["tsGain", "Gain needed by then, %", 0.5],
       ["hardDays", "Hard exit at day", 1], ["killPct", "Kill switch, % of pot", 1], ["rate", "MTF interest, % a day", 0.005],
@@ -951,7 +965,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
     return h("details", { class: "card" }, h("summary", { text: "Your rules and holdings" }),
       h("div", { class: "form" },
         fields.map(([k, label, step]) => h("label", {}, label, (inputs[k] = h("input", { type: "number", step: String(step), inputmode: "decimal", value: s[k] })))),
-        h("label", { class: "wide" }, "Stocks you already own (no MTF in these)", holdings),
+        h("label", { class: "wide" }, "Stocks you already own (no swing trades in these)", holdings),
         h("div", { class: "actions" },
           h("button", { class: "btn", type: "button", text: "Save settings", onclick: () => {
             for (const [k] of fields) { const v = Number(inputs[k].value); if (Number.isFinite(v) && v >= 0) book.settings[k] = v; }
@@ -963,14 +977,17 @@ td.hi { color: var(--deliv); font-weight: 600; }
           } }))));
   }
   function rulesCard() {
-    const s = S();
+    const s = S(), buf = DATA.mtf ? DATA.mtf.stop_buffer_pct : 0.25;
     const items = [
-      `Market regime: red (FIIs sold over ₹10,000 cr in 5 sessions, India VIX above 18, or Nifty below its 50-day average) means cash only at half size; amber allows up to 1.5×; green (FIIs net buyers, Nifty above its 50- and 200-day averages) up to 2×. Your cap is ${s.maxLev}×.`,
-      `Entry: footprint score ${s.minScore}+; a close above the previous 10-day high with delivery % above its 20-day average; futures long buildup; and a stop within ${s.stopMax}%, placed ${DATA.mtf ? DATA.mtf.stop_buffer_pct : 0.25}% under the 5-session low.`,
-      `Size: risk ${s.riskPct}% of the pot (${rupees(s.pot * s.riskPct / 100, 0)}) per trade, divided by the stop distance, with no more than ${rupeesShort(s.pot / Math.max(1, s.maxPos))} of your own money in one trade.`,
-      `Exits: a close below the stop (sell before 3:30 PM); not up ${s.tsGain}% by day ${s.tsDays}; day ${s.hardDays} at the latest. Keep a GTT emergency stop on MTF trades.`,
-      `Limits: ${s.maxPos} open trades, ${s.maxSector} per sector, none in stocks you own or with a negative institutional note. If your trades lose ${s.killPct}% of the pot, MTF switches off for 30 days. Raise the pot to ₹2 lakh only after 10 closed trades with a positive average.`,
-      `Costs (Zerodha): ${s.rate}% a day on the funded amount; ₹15 + GST to pledge and to unpledge; brokerage ₹20 or 0.3% per MTF order; STT 0.1% on each side; stamp duty 0.015% on buying; a DP charge on selling.`,
+      "Core first. This tab can't catch results-day gaps or short-covering rallies in the heavyweights: they arrive overnight or without a futures long buildup. An index holding catches them, since HDFC Bank, ICICI Bank, Reliance and Bharti Airtel alone are about a third of the Nifty 50. Long-term money belongs in a Nifty 50 index fund or ETF; this tab manages only the swing pot.",
+      `Cash only. Your leverage cap is ${s.maxLev}×${s.maxLev > 1 ? "; MTF then applies in amber and red only, up to 1.5×" : ", so there is no MTF"}. In both test windows the same signals did worse with MTF than in cash (last rule).`,
+      "Size by market: half size in green (FIIs net buyers, Nifty above its 50- and 200-day averages); full size in amber, and in red (FIIs sold over ₹10,000 cr in 5 sessions, India VIX above 18, or Nifty below its 50-day average). Breakouts that hold up in a weak market are leaders; in an uptrend more of them fail.",
+      `Entry, unchanged: footprint score ${s.minScore}+; a close above the previous 10-day high with delivery % above its 20-day average; futures long buildup; and a stop within ${s.stopMax}%, placed ${buf}% under the 5-session low. Looser versions that would have caught these rallies traded 2–3 times as often and fell 40–48% from their peak, even in cash.`,
+      `Size: risk ${s.riskPct}% of the pot (${rupees(s.pot * s.riskPct / 100, 0)}) per trade, divided by the stop distance, with no more than ${rupeesShort(s.pot / Math.max(1, s.maxPos))} in one trade. Both halve in green.`,
+      `Exits, unchanged: a close below the stop (sell before 3:30 PM); not up ${s.tsGain}% by day ${s.tsDays}; day ${s.hardDays} at the latest. Trailing stops, intraday stops, a later check and longer holds all tested worse in at least one window.`,
+      `Limits: ${s.maxPos} open trades, ${s.maxSector} per sector, none in stocks you own or with a negative institutional note. If your trades lose ${s.killPct}% of the pot, size halves for 30 days. Raise the pot to ₹2 lakh only after 10 closed trades with a positive average.`,
+      `Costs (Zerodha): delivery brokerage is free; STT 0.1% on each side; stamp duty 0.015% on buying; a DP charge on selling. MTF adds ${s.rate}% a day on the funded amount, ₹15 + GST to pledge and to unpledge, and brokerage of ₹20 or 0.3% per order.`,
+      "Evidence, Nifty 50 stocks on a ₹1 lakh pot. Apr 2020–Jul 2024 (Nifty +195%): old MTF rules +1.9%, worst drop 19.8%; same trades in cash +14.7%; this plan +13.8%, worst drop 7.3%. Oct 2024–Nov 2026 (Nifty −7.1%): old MTF rules −29.9%, worst drop 37.2%; cash −7.4%; this plan −1.2%, worst drop 6.4%. Entries at the next open, charges included.",
     ];
     return h("details", { class: "card" }, h("summary", { text: "The rules this tab applies" }), h("ol", { class: "rules" }, items.map((x) => h("li", { text: x }))));
   }
@@ -987,7 +1004,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
             try {
               const b = JSON.parse(ta.value);
               if (!b || !Array.isArray(b.positions)) throw new Error("bad");
-              book.settings = { ...DEFAULTS, ...(b.settings || {}) };
+              book.settings = settingsFrom(b);
               book.positions = b.positions;
               book.closed = Array.isArray(b.closed) ? b.closed : [];
               book.killUntil = b.killUntil || null;
@@ -1006,7 +1023,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
       modeCard(m),
       h("section", { class: "card" }, h("h3", { text: `Ready today (${ready.length})` }),
         h("p", { class: "note", style: "margin-top:0", text: ready.length
-          ? (m.lev > 1 ? "Each passes every entry rule. Sizes follow your risk and leverage limits." : "Each passes every entry rule. The regime allows cash only, so sizes are half size with no borrowing.")
+          ? "Each passes every entry rule. " + (m.lev > 1 ? "Sizes follow your risk and leverage limits." : m.factor < 1 ? "Cash only, at half size today." : "Cash only, at full size.")
           : "No stock passes every entry rule today. Waiting is part of the plan." })),
       ...ready.map(([st, ev]) => candidateCard(st, ev)),
       nearCard(near), positionsCard(), addFormCard(), settingsCard(), rulesCard(), backupCard(),

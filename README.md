@@ -2,8 +2,8 @@
 
 A phone-friendly page that shows, for every Nifty 50 stock, the day's delivery percentage, its 5, 10 and 20-day
 averages, delivered and traded quantity, volume against its 20-day average, average trade size, futures open-interest
-buildup, bulk and block deals, and a six-signal accumulation score. A market band at the top applies the MTF regime
-rule (red: cash only, amber: up to 1.5×, green: up to 2×).
+buildup, bulk and block deals, and a six-signal accumulation score. A market band at the top sets the size of swing
+trades (green: half size; amber and red: full size; always in cash).
 
 It refreshes itself every weekday night from NSE's public end-of-day files, using GitHub's free scheduled jobs.
 
@@ -65,34 +65,69 @@ FIIs are in index futures; the tile beside India VIX shows that as "% long". On 
 option changes include contracts that simply expired, so the verdict leaves options out that day.
 
 The participant file only splits open interest by category (FII, DII, Pro, Client); no public NSE file shows individual
-accounts. The regime rule above still uses FIIs' 5-session cash total, as written in the MTF plan.
+accounts. The regime rule still uses FIIs' 5-session cash total.
 
-## The MTF tab
+## The Swing tab (plan v2, November 2026)
 
-The MTF tab runs the whole MTF plan on every stock each night and on every trade you log.
+The Swing tab (it was the MTF tab) runs the swing plan on every stock each night and on every trade you log.
 
 | Rule | What the app checks |
 |---|---|
-| Market regime | Red (FIIs sold over ₹10,000 cr in 5 sessions, India VIX above 18, or Nifty below its 50-day average): cash only, half size. Amber: up to 1.5×. Green (FIIs net buyers, Nifty above its 50- and 200-day averages): up to 2× |
+| Core | Not a check: long-term money sits in a Nifty 50 index fund or ETF. HDFC Bank, ICICI Bank, Reliance and Bharti Airtel are about a third of the index, so it catches the gap and short-covering rallies this tab can't |
+| Leverage | None. Cash delivery only (leverage cap 1×). If you raise the cap, MTF applies in amber and red only, up to 1.5× |
+| Market regime | Green (FIIs net buyers, Nifty above its 50- and 200-day averages): half size. Amber: full size. Red (FIIs sold over ₹10,000 cr in 5 sessions, India VIX above 18, or Nifty below its 50-day average): full size |
 | Entry | Footprint score 4+; close above the previous 10-day high with delivery % above its 20-day average; futures long buildup; stop within 5% of the close, placed 0.25% under the 5-session low |
 | Personal limits | Not a stock you already own; no negative institutional note; at most 4 open trades and 2 per sector |
-| Size | Risk 2% of the pot (₹2,000 on ₹1 lakh) ÷ stop distance, with no more than a quarter of the pot of your own money in one trade |
-| Costs (Zerodha) | 0.04% a day on the funded amount, ₹15 + GST to pledge and to unpledge, brokerage ₹20 or 0.3% per MTF order, STT 0.1% each side, stamp duty 0.015% on buying, DP charge on selling |
+| Size | Risk 2% of the pot (₹2,000 on ₹1 lakh) ÷ stop distance, with no more than a quarter of the pot in one trade; both halve in green |
+| Costs (Zerodha) | Delivery brokerage is free; STT 0.1% each side, stamp duty 0.015% on buying, DP charge on selling. MTF would add 0.04% a day on the funded amount, ₹15 + GST to pledge and to unpledge, brokerage ₹20 or 0.3% per order |
 | Exits | A close below the stop; not up 3% by day 10; day 20 at the latest |
-| Kill switch | Logged trades down 10% of the pot: MTF off for 30 days |
-| Scale-up | Pot to ₹2 lakh only after 10 closed trades with a positive average, still at 2× or less |
+| Kill switch | Logged trades down 10% of the pot: half size for 30 days |
+| Scale-up | Pot to ₹2 lakh only after 10 closed trades with a positive average, still in cash |
 
-Every number in that table is a setting under *Your rules and holdings* in the app. Your settings, holdings and
+Saved settings from plan v1 keep everything except the leverage cap, which resets to 1× once.
+
+Every number in the rules table is a setting under *Your rules and holdings* in the app. Your settings, holdings and
 logged trades are stored only in your phone's browser, never in this public repository; use *Back up or move your
 trades* to copy them to another device.
 
-Each ready stock shows the share quantity, your money and the funded amount, the stop, the loss if the stop is hit,
+Each ready stock shows the share quantity, your money (and any funded amount), the stop, the loss if the stop is hit,
 the day-10 and day-20 dates, and the cost and break-even move to each. On a monthly F&O expiry day the futures reading
 is skipped, so no stock shows as ready that day.
 
 **Institutional notes** live in `config.json` under `notes`: `"bias": 1` marks positive institutional buying, `-1`
-keeps a stock out of MTF, `0` is information only. Update them when quarterly shareholding patterns come out (about
+keeps a stock out of swing trades, `0` is information only. Update them when quarterly shareholding patterns come out (about
 three weeks after each quarter ends) and after the monthly mutual fund portfolio disclosures (around the 10th).
+
+### Why plan v2
+
+In the late-October rally the old rules took none of the stocks people noticed:
+
+| Stock | Move | What blocked it |
+|---|---|---|
+| Reliance | +12.5% (30 Oct to 4 Nov), +11.6% of it on 2 Nov, which opened 5.4% higher | The gap put the stop 11.6–12.3% away (limit 5%) on 2, 3 and 4 Nov; 2 Nov was short covering, and on 3 Nov the stop alone blocked it |
+| Bharti Airtel | +9.3% (23 Oct to 4 Nov) | Broke out on 27 Oct (monthly expiry, so no futures reading; stop 6.2%), then 2 and 3 Nov, both on short covering rather than a long buildup |
+| HDFC Bank | +8.3% (27 Oct to 4 Nov) | Broke out only on 4 Nov, on short covering, with an 8.2% stop |
+| ICICI Bank | +3.4% (28 Oct to 4 Nov) | Never closed above its 10-day high |
+
+The question was whether different rules would have done better over time. Backtest on Nifty 50 stocks (the January
+2020 list for 2020–24, so the test isn't only today's winners), a ₹1 lakh pot, signals at the close, entries at the next
+open, Zerodha charges and MTF interest included:
+
+| Window | Nifty | Old MTF rules | Same trades in cash | Plan v2 | Loosened rules, cash |
+|---|---|---|---|---|---|
+| Apr 2020 – Jul 2024 | +195% | +1.9% (worst drop 19.8%) | +14.7% (10.9%) | +13.8% (7.3%) | +7.8% (40.4%) |
+| Oct 2024 – Nov 2026 | −7.1% | −29.9% (37.2%) | −7.4% (12.6%) | −1.2% (6.4%) | −48.1% (48.1%) |
+
+Same signals in cash at full size, split by the market regime on the signal day:
+
+| Window | Green | Amber | Red |
+|---|---|---|---|
+| Apr 2020 – Jul 2024 | 85 trades, 49% winners, −₹77 | 1 trade | 54 trades, 52% winners, +₹14,868 |
+| Oct 2024 – Nov 2026 | 33 trades, 30% winners, −₹14,530 | 12 trades, 50% winners, +₹4,321 | 30 trades, 40% winners, +₹2,839 |
+
+Trailing stops, intraday stops, dropping or delaying the day-10 check, and a 30-day hold were each worse in at least
+one window, so the exits are unchanged. The backtest's regime leaves out the FII cash leg (no history), and July to
+September 2024 is used to warm up the indicators. Past results don't promise future ones; this is not investment advice.
 
 ## Adding stocks outside the Nifty 50
 
