@@ -17,7 +17,7 @@ with sync_playwright() as pw:
         for attempt in range(6):
             p.goto(URL + "?v=%d#mtf" % time.time(), wait_until="networkidle")
             p.wait_for_selector("#mtf-view:not([hidden]) .regime", timeout=20000)
-            if "Swing" in p.inner_text("nav.tabs"):
+            if "did better in both" in p.inner_text("#mtf-view .regime"):
                 break
             time.sleep(30)
         out.append(f"[{name}] tabs: {p.inner_text('nav.tabs')!r}")
@@ -25,6 +25,9 @@ with sync_playwright() as pw:
         out.append(f"[{name}] why: {p.inner_text('#mtf-view .regime .why')!r}")
         lev = p.evaluate("() => [...document.querySelectorAll('#mtf-view label')].filter(l => l.textContent.startsWith('Leverage cap')).map(l => l.querySelector('input').value)")
         out.append(f"[{name}] leverage cap input: {lev}")
+        stopmax = p.evaluate("() => [...document.querySelectorAll('#mtf-view label')].filter(l => l.textContent.startsWith('Widest stop')).map(l => l.querySelector('input').value)")
+        out.append(f"[{name}] widest stop input: {stopmax}")
+        out.append(f"[{name}] ready: {p.evaluate('() => [...document.querySelectorAll(\"#mtf-view article.cand h3 span:first-child\")].map(e => e.textContent)')}")
         p.screenshot(path=f"live-{name}-swing.png")
         p.evaluate("() => document.querySelectorAll('#mtf-view details').forEach(d => d.open = true)")
         rules = p.locator("#mtf-view details:has(summary:text('The rules this tab applies'))")
