@@ -1,0 +1,18 @@
+[fresh] tabs: 'Stocks\nSwing'
+[fresh] mode: 'Amber: cash only, full size'
+[fresh] why: 'Nifty is below its 200-day average\nFull size: breakouts that hold up in a weak or mixed market did best in the 2020–26 backtests.'
+[fresh] leverage cap input: ['1']
+[fresh] rules first item: "Core first. This tab can't catch results-day gaps or short-covering rallies in the heavyweights: they arrive overnight or without a futures long buildup. An ind"
+[fresh] rules count: 9
+[fresh] band: 'Amber: mixed market. Swing trades in cash, full size'
+[fresh] fii line: ['Leaning bullish: FIIs bought ₹7,284 cr (4th straight day) and covered 15.1k futures shorts; options lean bearish by 14.9k contracts. Futures are 86% short, which is common for FIIs and not a rally signal by itself.', '', "F&O columns: the day's change in FIIs' net contracts (long − short). Green is bullish for Nifty, so falling puts are green. * Nifty weekly expiry: option changes include expired contracts."]
+[fresh] hscroll: False, errors: []
+[v1-book] tabs: 'Stocks\nSwing'
+[v1-book] mode: 'Amber: cash only, full size'
+[v1-book] why: 'Nifty is below its 200-day average\nFull size: breakouts that hold up in a weak or mixed market did best in the 2020–26 backtests.'
+[v1-book] leverage cap input: ['1']
+[v1-book] rules first item: "Core first. This tab can't catch results-day gaps or short-covering rallies in the heavyweights: they arrive overnight or without a futures long buildup. An ind"
+[v1-book] rules count: 9
+[v1-book] band: 'Amber: mixed market. Swing trades in cash, full size'
+[v1-book] fii line: ['Leaning bullish: FIIs bought ₹7,284 cr (4th straight day) and covered 15.1k futures shorts; options lean bearish by 14.9k contracts. Futures are 86% short, which is common for FIIs and not a rally signal by itself.', '', "F&O columns: the day's change in FIIs' net contracts (long − short). Green is bullish for Nifty, so falling puts are green. * Nifty weekly expiry: option changes include expired contracts."]
+[v1-book] hscroll: False, errors: []
