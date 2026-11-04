@@ -1,27 +1,26 @@
-name: Download NSE history (temporary)
+name: Check the published page (temporary)
 on:
   push:
     branches: [probe-live-sources]
-    paths: [history.py, .github/workflows/probe.yml]
+    paths: [verify_live.py, .github/workflows/probe.yml]
 permissions:
   contents: write
 concurrency:
   group: probe
   cancel-in-progress: true
 jobs:
-  history:
+  check:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install requests
-      - run: python history.py 2024-07-05 2020-01-01 hist_old.json > run_out.txt 2>&1 || true
+      - run: pip install playwright && python -m playwright install --with-deps chromium
+      - run: python verify_live.py > run_out.txt 2>&1 || true
       - run: |
-          gzip -9 -f hist_old.json || true
           git config user.name "delivery-radar-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "history output" && git push
+          git commit -m "live check output" && git push
