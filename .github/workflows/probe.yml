@@ -18,10 +18,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install requests
-      - run: python history.py 2026-11-04 || true
+      - run: python history.py 2024-07-05 2020-01-01 hist_old.json || true
       - run: |
-          gzip -9 -f hist.json || true
+          gzip -9 -f hist_old.json || true
           git config user.name "delivery-radar-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add hist.json.gz hist_log.txt
+          git add hist_old.json.gz hist_old_log.txt
           git commit -m "history output" && git push

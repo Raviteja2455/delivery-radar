@@ -25,12 +25,15 @@ H = {"User-Agent": UA, "Accept": "*/*", "Accept-Language": "en-IN,en;q=0.9", "Re
 URLS = {
     "eq": "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{d:%d%m%Y}.csv",
     "fo": "https://nsearchives.nseindia.com/content/fo/BhavCopy_NSE_FO_0_0_0_{d:%Y%m%d}_F_0000.csv.zip",
+    "fo_old": "https://nsearchives.nseindia.com/content/historical/DERIVATIVES/{d:%Y}/{mon}/fo{d:%d}{mon}{d:%Y}bhav.csv.zip",
     "idx": "https://nsearchives.nseindia.com/content/indices/ind_close_all_{d:%d%m%Y}.csv",
     "part": "https://nsearchives.nseindia.com/content/nsccl/fao_participant_oi_{d:%d%m%Y}.csv",
 }
-START = date(2024, 7, 8)
+START = date.fromisoformat(sys.argv[2]) if len(sys.argv) > 2 else date(2024, 7, 8)
 END = date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else date.today()
-LOG = open("hist_log.txt", "w")
+OLD_FO = date(2024, 7, 8)
+OUTNAME = sys.argv[3] if len(sys.argv) > 3 else "hist.json"
+LOG = open(OUTNAME.replace(".json", "_log.txt"), "w")
 lock = threading.Lock()
 
 
@@ -108,7 +111,39 @@ def day(d, symbols):
             log("eq date mismatch", d, fdate)
     if "eq" not in out:
         return out  # not a trading day (or no file): skip the rest
-    b = fetch(URLS["fo"].format(d=d), binary=True)
+    if d < OLD_FO:
+        b = fetch(URLS["fo_old"].format(d=d, mon=d.strftime("%b").upper()), binary=True)
+        if b:
+            try:
+                with zipfile.ZipFile(io.BytesIO(b)) as z:
+                    name = next(n for n in z.namelist() if n.lower().endswith(".csv"))
+                    text = z.read(name).decode("utf-8-sig", errors="replace")
+                fo, nx = {}, 0
+                for r in rows(text):
+                    ins, sym = r.get("INSTRUMENT"), r.get("SYMBOL")
+                    try:
+                        xp = datetime.strptime(r.get("EXPIRY_DT", ""), "%d-%b-%Y").date()
+                    except ValueError:
+                        continue
+                    if ins == "OPTIDX" and sym == "NIFTY" and xp == d:
+                        nx = 1
+                    if ins != "FUTSTK" or sym not in symbols:
+                        continue
+                    fo.setdefault(sym, []).append((xp.isoformat(), num(r.get("OPEN_INT")), num(r.get("CHG_IN_OI")),
+                                                   num(r.get("CLOSE")), d.isoformat()))
+                agg = {}
+                for sym, cs in fo.items():
+                    cs.sort()
+                    td = cs[0][4]
+                    expiring = [c for c in cs if c[0] == td]
+                    live = [c for c in cs if c[0] != td] or cs
+                    agg[sym] = [sum(c[1] or 0 for c in live), sum(c[2] or 0 for c in live), live[0][3], 1 if expiring else 0]
+                out["fo"], out["nx"] = agg, nx
+            except Exception as e:  # noqa: BLE001
+                log("fo_old parse", d, repr(e)[:100])
+        b = None
+    else:
+        b = fetch(URLS["fo"].format(d=d), binary=True)
     if b:
         try:
             with zipfile.ZipFile(io.BytesIO(b)) as z:
@@ -164,7 +199,8 @@ def main():
     n50 = fetch("https://nsearchives.nseindia.com/content/indices/ind_nifty50list.csv")
     symbols = {r["Symbol"] for r in rows(n50)} if n50 else set()
     # Large caps that were in the Nifty 50 for part of the period, so the test isn't only today's winners.
-    symbols |= {"BPCL", "BRITANNIA", "DIVISLAB", "HEROMOTOCO", "INDUSINDBK", "LTIM", "TATAMOTORS", "UPL", "NESTLEIND"}
+    symbols |= {"BPCL", "BRITANNIA", "DIVISLAB", "HEROMOTOCO", "INDUSINDBK", "LTIM", "TATAMOTORS", "UPL", "NESTLEIND",
+                "GAIL", "IOC", "SHREECEM", "HDFC", "ZEEL", "VEDL", "YESBANK"}
     log("symbols", len(symbols), sorted(symbols))
     days = []
     d = START
@@ -180,7 +216,7 @@ def main():
             if i % 50 == 0:
                 log(f"{i}/{len(days)} {res['d']} eq={'eq' in res} fo={'fo' in res} part={'part' in res} t={time.time()-t0:.0f}s")
     sessions = [r for r in results if "eq" in r]
-    json.dump({"symbols": sorted(symbols), "sessions": sessions}, open("hist.json", "w"), separators=(",", ":"))
+    json.dump({"symbols": sorted(symbols), "sessions": sessions}, open(OUTNAME, "w"), separators=(",", ":"))
     log("done", len(sessions), "sessions", f"{time.time()-t0:.0f}s")
 
 
