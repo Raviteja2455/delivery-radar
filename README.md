@@ -25,21 +25,28 @@ Changes to the page itself (`docs/index.html`) are published within a minute or 
 
 ## The live strip
 
-Above the regime band, the app shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR. Your phone fetches
-these itself every 20 seconds while the app is open, and pauses when it is in the background, so they don't depend on
-the nightly job.
+Above the regime band, the app shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR, with MCX gold and
+silver on a second row. Your phone fetches these itself every 20 seconds while the app is open, and pauses when it is in
+the background, so they don't depend on the nightly job.
 
 | Item | Contract shown | Delay |
 |---|---|---|
 | GIFT Nifty | The nearest monthly contract still trading (it switches to the next month at 3:30 PM on expiry day) | Real time |
 | Brent, WTI | The most-traded contract, named after the label (Brent moves to the next month a few days before expiry) | 10 minutes |
 | USD/INR | Spot rate | Real time |
+| MCX Gold | The most-traded contract of the 1 kg Gold future, in ₹ per 10 g, month named after the label | Real time |
+| MCX Silver | The most-traded contract of the 30 kg Silver future, in ₹ per kg, month named after the label | Real time |
 
 Outside NSE hours, the line under the strip compares GIFT Nifty with the closing price of the NSE Nifty futures for the
 same month (a gap within ±0.15% reads as a flat start). During NSE hours that line pauses, because NSE's free prices
 are 15 minutes late. Quotes come from TradingView's public quote service; if it doesn't answer, CNBC (crude, USD/INR)
-and Moneycontrol (GIFT Nifty) fill in and the strip says "backup feed". The last prices are kept on the phone, so the
-strip still shows them, marked with their time, when you are offline.
+and Moneycontrol (GIFT Nifty, MCX) fill in and the strip says "backup feed". The last prices are kept on the phone, so
+the strip still shows them, marked with their time, when you are offline.
+
+For MCX, the app follows TradingView's continuous contract, which moves to the next month as trading shifts there ahead
+of expiry; the label then changes month and the price shifts by the gap between the two contracts. It never shows
+TradingView's price for a quieter month directly, because those can lag well behind the exchange. The Moneycontrol backup
+asks for the next two contracts and shows the one with more open interest.
 
 ## The MTF tab
 
