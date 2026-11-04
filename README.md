@@ -76,7 +76,7 @@ The Swing tab (it was the MTF tab) runs the swing plan on every stock each night
 | Core | Not a check: long-term money sits in a Nifty 50 index fund or ETF. HDFC Bank, ICICI Bank, Reliance and Bharti Airtel are about a third of the index, so it catches the gap and short-covering rallies this tab can't |
 | Leverage | None. Cash delivery only (leverage cap 1×). If you raise the cap, MTF applies in amber and red only, up to 1.5× |
 | Market regime | Green (FIIs net buyers, Nifty above its 50- and 200-day averages): half size. Amber: full size. Red (FIIs sold over ₹10,000 cr in 5 sessions, India VIX above 18, or Nifty below its 50-day average): full size |
-| Entry | Footprint score 4+; close above the previous 10-day high with delivery % above its 20-day average; futures long buildup; stop within 5% of the close, placed 0.25% under the 5-session low |
+| Entry | Footprint score 4+; close above the previous 10-day high with delivery % above its 20-day average; futures long buildup; stop within 10% of the close (was 5%), placed 0.25% under the 5-session low |
 | Personal limits | Not a stock you already own; no negative institutional note; at most 4 open trades and 2 per sector |
 | Size | Risk 2% of the pot (₹2,000 on ₹1 lakh) ÷ stop distance, with no more than a quarter of the pot in one trade; both halve in green |
 | Costs (Zerodha) | Delivery brokerage is free; STT 0.1% each side, stamp duty 0.015% on buying, DP charge on selling. MTF would add 0.04% a day on the funded amount, ₹15 + GST to pledge and to unpledge, brokerage ₹20 or 0.3% per order |
@@ -84,7 +84,7 @@ The Swing tab (it was the MTF tab) runs the swing plan on every stock each night
 | Kill switch | Logged trades down 10% of the pot: half size for 30 days |
 | Scale-up | Pot to ₹2 lakh only after 10 closed trades with a positive average, still in cash |
 
-Saved settings from plan v1 keep everything except the leverage cap, which resets to 1× once.
+Saved settings from plan v1 keep everything except the leverage cap and the stop limit, which reset to 1× and 10% once.
 
 Every number in the rules table is a setting under *Your rules and holdings* in the app. Your settings, holdings and
 logged trades are stored only in your phone's browser, never in this public repository; use *Back up or move your
@@ -111,23 +111,45 @@ In the late-October rally the old rules took none of the stocks people noticed:
 
 The question was whether different rules would have done better over time. Backtest on Nifty 50 stocks (the January
 2020 list for 2020–24, so the test isn't only today's winners), a ₹1 lakh pot, signals at the close, entries at the next
-open, Zerodha charges and MTF interest included:
+open, Zerodha charges and MTF interest included. Each step adds one change; brackets show the worst drop from a peak:
 
-| Window | Nifty | Old MTF rules | Same trades in cash | Plan v2 | Loosened rules, cash |
-|---|---|---|---|---|---|
-| Apr 2020 – Jul 2024 | +195% | +1.9% (worst drop 19.8%) | +14.7% (10.9%) | +13.8% (7.3%) | +7.8% (40.4%) |
-| Oct 2024 – Nov 2026 | −7.1% | −29.9% (37.2%) | −7.4% (12.6%) | −1.2% (6.4%) | −48.1% (48.1%) |
+| Step | Apr 2020 – Jul 2024 (Nifty +195%) | Oct 2024 – Nov 2026 (Nifty −7.1%) |
+|---|---|---|
+| Old MTF rules | +1.9% (19.8%) | −29.9% (37.2%) |
+| 1. Cash instead of MTF | +14.7% (10.9%) | −7.4% (12.6%) |
+| 2. Half size in green | +13.8% (7.3%) | −1.2% (6.4%) |
+| 3. Stops up to 10% instead of 5% = **plan v2** | **+66.2% (14.1%)** | **+3.8% (8.6%)** |
+
+Plan v2 beat the old rules in four of five sub-periods and nearly tied the fifth: +30.9% vs −9.4% (Apr 2020–Dec 2021),
++16.6% vs −1.0% (2022–Mar 2023), +10.9% vs +11.5% (Apr 2023–Jul 2024), −2.1% vs −18.0% (Oct 2024–Sep 2025) and
++5.1% vs −11.4% (Oct 2025–Nov 2026).
+
+Changes tested on top of plan v2 and rejected:
+
+| Change | Apr 2020 – Jul 2024 | Oct 2024 – Nov 2026 |
+|---|---|---|
+| Accept short covering as well as long buildup (would have caught Airtel and HDFC Bank) | +28.4% (14.8%) | −1.0% (15.2%) |
+| MTF 1.5× in amber and red | +63.6% (20.0%) | −4.4% (12.9%) |
+| Full size in green too | +80.4% (14.1%) | −9.9% (13.3%) |
+| Skip green entirely | +50.3% (14.1%) | +3.8% (7.9%) |
+| No day-10 check | +51.3% (11.0%) | −0.9% (12.0%) |
+| Hard exit at day 30 | +76.5% (11.7%) | −11.0% (14.7%) |
+
+Why the stop limit mattered: the old 5% cap threw out the strongest breakouts, whose 5-session low sits further away.
+Trades with 5–10% stops won 60% of the time (+2.17% average) in 2020–24 and 45% (+0.48%) in 2024–26, against 55%
+(+1.16%) and 39% (−0.29%) for stops under 5%. Sizing by risk keeps the loss at the stop the same either way.
 
 Same signals in cash at full size, split by the market regime on the signal day:
 
 | Window | Green | Amber | Red |
 |---|---|---|---|
-| Apr 2020 – Jul 2024 | 85 trades, 49% winners, −₹77 | 1 trade | 54 trades, 52% winners, +₹14,868 |
-| Oct 2024 – Nov 2026 | 33 trades, 30% winners, −₹14,530 | 12 trades, 50% winners, +₹4,321 | 30 trades, 40% winners, +₹2,839 |
+| Apr 2020 – Jul 2024 | 99 trades, 57% winners, +₹28,048 | 1 trade | 116 trades, 60% winners, +₹50,454 |
+| Oct 2024 – Nov 2026 | 41 trades, 34% winners, −₹14,731 | 17 trades, 59% winners, +₹11,324 | 57 trades, 44% winners, −₹6,446 |
 
-Trailing stops, intraday stops, dropping or delaying the day-10 check, and a 30-day hold were each worse in at least
-one window, so the exits are unchanged. The backtest's regime leaves out the FII cash leg (no history), and July to
-September 2024 is used to warm up the indicators. Past results don't promise future ones; this is not investment advice.
+Trailing stops and intraday stop orders came out about the same as the closing-basis stop, so the exits are unchanged.
+The backtest's regime leaves out the FII cash leg (no history), and July to September 2024 is used to warm up the
+indicators. Results shift by several points with which trades fill the four slots, so read the direction, not the
+decimals. Past results don't promise future ones; this is not investment advice.
 
 ## Adding stocks outside the Nifty 50
 

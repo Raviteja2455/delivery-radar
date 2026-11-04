@@ -272,7 +272,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         <p>The score counts six signals:</p>
         <ol id="sig-help"></ol>
         <p>The live strip shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR, with MCX gold (₹ per 10 g) and silver (₹ per kg) below, refreshed every 20 seconds while the app is open. A green dot means that market is trading now. GIFT Nifty, USD/INR and MCX are real time; crude runs 10 minutes behind. Each uses its most-traded contract, named after the label. When MCX trading moves to the next month ahead of expiry, the label changes month and the price shifts by the gap between the two contracts. Outside NSE hours the line under the strip compares GIFT Nifty with the close of the Nifty futures for the same month, which is the usual read on how the next session will open.</p>
-        <p>The band at the top sets the size of swing trades. All of them are in cash, with no MTF. Green (an uptrend) means half size, because breakouts taken in green markets were flat to losing in the 2020–26 backtests; amber and red mean full size. The Swing tab runs the full entry, sizing and exit rules on every stock and explains the evidence under <i>The rules this tab applies</i>.</p>
+        <p>The band at the top sets the size of swing trades. All of them are in cash, with no MTF. Green (an uptrend) means half size, because breakouts taken in green markets did worst in the 2020–26 backtests; amber and red mean full size. The Swing tab runs the full entry, sizing and exit rules on every stock and explains the evidence under <i>The rules this tab applies</i>.</p>
         <p>FII activity, inside the band, shows each session's net cash buying or selling by foreign investors (NSE's provisional figure) and how their index futures, calls and puts changed, from NSE's participant-wise open interest. A positive futures or calls number, or a negative puts number, is the bullish side. The verdict under the table weighs the latest day's cash, futures and options: when they all agree it says bullish or bearish, otherwise it leans with the majority. On Nifty's weekly expiry (marked *), option changes include contracts that simply expired. The tile beside VIX shows how much of FIIs' index-futures position is long.</p>
       </div>
     </details>
@@ -680,16 +680,17 @@ td.hi { color: var(--deliv); font-weight: 600; }
 
 
   // ---------------------------------------------------------------- swing rules (settings and trades stay on this device)
-  // Plan v2 (Nov 2026): the same entries and exits, in cash. Backtests on Nifty 50 stocks, Apr 2020–Jul 2024 and
-  // Oct 2024–Nov 2026, found MTF leverage turned a small edge into a loss, and that breakouts taken while the market was
-  // green did worst. Saved settings from plan v1 get the new leverage cap once; every other setting is kept.
+  // Plan v2 (Nov 2026): cash instead of MTF, half size in green, stops up to 10% instead of 5%; the rest unchanged.
+  // Backtests on Nifty 50 stocks, Apr 2020–Jul 2024 and Oct 2024–Nov 2026: MTF trailed cash in both windows, breakouts
+  // taken in a green market did worst, and the 5% stop limit threw out the strongest breakouts. Saved plan-v1
+  // settings get the new leverage cap and stop limit once; every other setting is kept.
   const PLAN = 2;
-  const DEFAULTS = { pot: 100000, riskPct: 2, maxLev: 1, maxPos: 4, maxSector: 2, stopMax: 5, minScore: 4,
+  const DEFAULTS = { pot: 100000, riskPct: 2, maxLev: 1, maxPos: 4, maxSector: 2, stopMax: 10, minScore: 4,
     tsDays: 10, tsGain: 3, hardDays: 20, killPct: 10, rate: 0.04, holdings: [] };
   const BOOK_KEY = "dr-mtf";
   const settingsFrom = (b) => {
     const s = { ...DEFAULTS, ...(b.settings || {}) };
-    if ((b.plan || 1) < PLAN) s.maxLev = DEFAULTS.maxLev;
+    if ((b.plan || 1) < PLAN) { s.maxLev = DEFAULTS.maxLev; s.stopMax = DEFAULTS.stopMax; }
     return s;
   };
   const book = (() => {
@@ -838,8 +839,8 @@ td.hi { color: var(--deliv); font-weight: 600; }
     const why = m.key === "kill"
       ? [`Your trades are down ${fmt(-pct, 1)}% of the pot, past the ${s.killPct}% limit. Half size, cash only, until ${shortDate(book.killUntil)}.`]
       : [...DATA.market.reasons, m.key === "green"
-        ? "Half size: in the 2020–26 backtests, breakouts taken in a green market were flat to losing."
-        : "Full size: breakouts that hold up in a weak or mixed market did best in the 2020–26 backtests."];
+        ? "Half size: breakouts taken in a green market did worst in both backtest windows (2020–24 and 2024–26)."
+        : "Full size: breakouts that hold up in a weak or mixed market did better in both backtest windows (2020–24 and 2024–26)."];
     return h("section", { class: "regime", "data-r": m.key === "kill" ? "red" : m.key },
       h("p", { class: "verdict" }, h("b", { text: head }), `: ${what}`),
       h("ul", { class: "why" }, why.map((r) => h("li", { text: r }))),
@@ -980,14 +981,14 @@ td.hi { color: var(--deliv); font-weight: 600; }
     const s = S(), buf = DATA.mtf ? DATA.mtf.stop_buffer_pct : 0.25;
     const items = [
       "Core first. This tab can't catch results-day gaps or short-covering rallies in the heavyweights: they arrive overnight or without a futures long buildup. An index holding catches them, since HDFC Bank, ICICI Bank, Reliance and Bharti Airtel alone are about a third of the Nifty 50. Long-term money belongs in a Nifty 50 index fund or ETF; this tab manages only the swing pot.",
-      `Cash only. Your leverage cap is ${s.maxLev}×${s.maxLev > 1 ? "; MTF then applies in amber and red only, up to 1.5×" : ", so there is no MTF"}. In both test windows the same signals did worse with MTF than in cash (last rule).`,
-      "Size by market: half size in green (FIIs net buyers, Nifty above its 50- and 200-day averages); full size in amber, and in red (FIIs sold over ₹10,000 cr in 5 sessions, India VIX above 18, or Nifty below its 50-day average). Breakouts that hold up in a weak market are leaders; in an uptrend more of them fail.",
-      `Entry, unchanged: footprint score ${s.minScore}+; a close above the previous 10-day high with delivery % above its 20-day average; futures long buildup; and a stop within ${s.stopMax}%, placed ${buf}% under the 5-session low. Looser versions that would have caught these rallies traded 2–3 times as often and fell 40–48% from their peak, even in cash.`,
-      `Size: risk ${s.riskPct}% of the pot (${rupees(s.pot * s.riskPct / 100, 0)}) per trade, divided by the stop distance, with no more than ${rupeesShort(s.pot / Math.max(1, s.maxPos))} in one trade. Both halve in green.`,
-      `Exits, unchanged: a close below the stop (sell before 3:30 PM); not up ${s.tsGain}% by day ${s.tsDays}; day ${s.hardDays} at the latest. Trailing stops, intraday stops, a later check and longer holds all tested worse in at least one window.`,
+      `Cash only. Your leverage cap is ${s.maxLev}×${s.maxLev > 1 ? "; MTF then applies in amber and red only, up to 1.5×" : ", so there is no MTF"}. With 1.5× MTF in amber and red, this plan made less in both test windows and its worst drop was deeper.`,
+      "Size by market: half size in green (FIIs net buyers, Nifty above its 50- and 200-day averages); full size in amber, and in red (FIIs sold over ₹10,000 cr in 5 sessions, India VIX above 18, or Nifty below its 50-day average). Green-market breakouts had the lowest win rate in both windows. Halving them gave up some return in the 2020–24 bull run (+66% instead of +80%) and saved the 2024–26 fall (+4% instead of −10%).",
+      `Entry: footprint score ${s.minScore}+; a close above the previous 10-day high with delivery % above its 20-day average; futures long buildup; and a stop within ${s.stopMax}%, placed ${buf}% under the 5-session low. The old 5% limit threw out the strongest breakouts: trades with 5–10% stops did better than tighter ones in both windows. Accepting short covering instead of a long buildup would have caught Airtel and HDFC Bank in the Oct–Nov 2026 rally, but it cut returns in both windows.`,
+      `Size: risk ${s.riskPct}% of the pot (${rupees(s.pot * s.riskPct / 100, 0)}) per trade, divided by the stop distance, with no more than ${rupeesShort(s.pot / Math.max(1, s.maxPos))} in one trade. Both halve in green. A wider stop means fewer shares, so the loss at the stop stays the same.`,
+      `Exits, unchanged: a close below the stop (sell before 3:30 PM); not up ${s.tsGain}% by day ${s.tsDays}; day ${s.hardDays} at the latest. Trailing stops, intraday stop orders, a later or no day-${s.tsDays} check, and a 30-day hold were no better across both windows.`,
       `Limits: ${s.maxPos} open trades, ${s.maxSector} per sector, none in stocks you own or with a negative institutional note. If your trades lose ${s.killPct}% of the pot, size halves for 30 days. Raise the pot to ₹2 lakh only after 10 closed trades with a positive average.`,
       `Costs (Zerodha): delivery brokerage is free; STT 0.1% on each side; stamp duty 0.015% on buying; a DP charge on selling. MTF adds ${s.rate}% a day on the funded amount, ₹15 + GST to pledge and to unpledge, and brokerage of ₹20 or 0.3% per order.`,
-      "Evidence, Nifty 50 stocks on a ₹1 lakh pot. Apr 2020–Jul 2024 (Nifty +195%): old MTF rules +1.9%, worst drop 19.8%; same trades in cash +14.7%; this plan +13.8%, worst drop 7.3%. Oct 2024–Nov 2026 (Nifty −7.1%): old MTF rules −29.9%, worst drop 37.2%; cash −7.4%; this plan −1.2%, worst drop 6.4%. Entries at the next open, charges included.",
+      "Evidence: Nifty 50 stocks, a ₹1 lakh pot, entries at the next open, charges included. Apr 2020–Jul 2024 (Nifty +195%): old MTF rules +1.9%, worst drop 19.8%; plan v2 +66.2%, worst drop 14.1%. Oct 2024–Nov 2026 (Nifty −7.1%): old rules −29.9%, worst drop 37.2%; plan v2 +3.8%, worst drop 8.6%. Past results don't promise future ones.",
     ];
     return h("details", { class: "card" }, h("summary", { text: "The rules this tab applies" }), h("ol", { class: "rules" }, items.map((x) => h("li", { text: x }))));
   }
