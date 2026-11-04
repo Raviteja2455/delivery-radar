@@ -211,7 +211,14 @@ def main():
     t0 = time.time()
     results = []
     with cf.ThreadPoolExecutor(max_workers=4) as ex:
-        for i, res in enumerate(ex.map(lambda x: day(x, symbols), days)):
+        def safe(x):
+            try:
+                return day(x, symbols)
+            except Exception as e:  # noqa: BLE001
+                import traceback
+                log("ERROR", x, traceback.format_exc()[-600:])
+                return {"d": x.isoformat()}
+        for i, res in enumerate(ex.map(safe, days)):
             results.append(res)
             if i % 50 == 0:
                 log(f"{i}/{len(days)} {res['d']} eq={'eq' in res} fo={'fo' in res} part={'part' in res} t={time.time()-t0:.0f}s")
