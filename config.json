@@ -1,7 +1,7 @@
 {
   "extra_symbols": [],
   "pick": {"every_days": 10, "target_pct": 5, "window_days": 91, "stop_pct": 8},
-  "research": {"pot": 100000, "max_positions": 5, "every_days": 14, "max_sector": 2, "max_small": 2,
+  "research": {"pot": 100000, "max_positions": 1, "every_days": 14, "max_sector": 2, "max_small": 2,
                "discount_large": 20, "discount_mid": 25, "discount_small": 30,
                "stop_large": 15, "stop_mid": 18, "stop_small": 22,
                "coe_large": 12.5, "coe_mid": 13.5, "coe_small": 15},

@@ -188,7 +188,7 @@ score and rank, and the Stocks tab can be sorted by it.
 
 ## The Research tab (November 2026)
 
-A separate ₹1 lakh portfolio for holdings of six months to two years, run by a fixed rulebook. Every night the job
+₹1 lakh for one holding of six months to two years, run by a fixed rulebook. Every night the job
 screens the Nifty 500, values each quality stock, and names a pick only when one clears every check. Most nights it
 names nothing.
 
@@ -196,10 +196,11 @@ names nothing.
 
 | Item | Rule |
 |---|---|
-| Money | ₹1,00,000 in 5 equal slots of ₹20,000; cash delivery, no leverage. What isn't invested stays in cash |
+| Money | ₹1,00,000 in one stock at a time; cash delivery, no leverage. Until a stock clears every check it stays in cash, and no second pick is named until the first is sold |
+| Risk | With everything in one stock, a stop costs about ₹15,000 (large cap), ₹18,000 (mid cap) or ₹22,000 (small cap) |
 | Universe | Nifty 500. Large cap = Nifty 100, mid cap = Nifty Midcap 150, small cap = Nifty Smallcap 250 |
-| Spread | At most 2 stocks in one sector and 2 small caps |
 | Pace | At most one new pick every 14 days |
+| To spread it | Set `max_positions` above 1 in `config.json`: the amount is split into equal parts, with at most 2 stocks in one sector and 2 small caps |
 | Horizon | 6–12 months, or 1–2 years for a compounder (return on equity 18%+, growth 12%+, debt under 0.5× equity, Piotroski 6+) |
 
 **Step 1: quality, all six checks**
@@ -211,7 +212,7 @@ names nothing.
 | Growth | Sales up 8% a year over five years; neither sales nor earnings shrinking now | Same |
 | Strength | Piotroski score 5 of 9 or more | 5 or more analysts following it (the screen can't read bad loans) |
 | Cash | Free cash flow positive; accruals under 25% of assets | Return on assets 1% or more |
-| Tradable | ₹5 crore a day; one share fits a slot | Same |
+| Tradable | ₹5 crore a day; one share costs no more than the position | Same |
 
 **Step 2: fair value, four ways**
 

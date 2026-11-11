@@ -193,7 +193,9 @@ PICK_DEFAULTS = {"every_days": 10, "target_pct": 5.0, "window_days": 91, "stop_p
 # Research portfolio: 6-month to 2-year investments from the Nifty 500, bought only at a margin of safety
 # below fair value. All percentages; config.json's "research" block overrides any of them.
 RESEARCH_DEFAULTS = {
-    "pot": 100000, "max_positions": 5, "every_days": 14, "max_sector": 2, "max_small": 2,
+    # One stock at a time, with the whole amount in it. Set max_positions above 1 to split the amount into
+    # equal parts instead; max_sector and max_small only matter then.
+    "pot": 100000, "max_positions": 1, "every_days": 14, "max_sector": 2, "max_small": 2,
     "discount_large": 20.0, "discount_mid": 25.0, "discount_small": 30.0,  # margin of safety: % below fair value needed to buy
     "stop_large": 15.0, "stop_mid": 18.0, "stop_small": 22.0,         # closing-basis stop under the buy price
     # Return demanded: the 10-year government bond yield (about 7.3% in November 2026) plus roughly
@@ -1755,8 +1757,11 @@ def build_research(days, adj, idx, meta, cfg, names, asof, make_picks):
             open_now.append(new)
             due = plus_days(asof, R["every_days"])
     if ready and not note:
-        if len(open_now) >= R["max_positions"]:
-            note = f"All {R['max_positions']} slots are in use, so no new pick is made until one closes."
+        if len(open_now) >= R["max_positions"] and R["max_positions"] == 1:
+            note = (f"The money is in {open_now[0]['s']}, so no new pick is named until it is sold. "
+                    "Other stocks that reach the buy zone are still listed below.")
+        elif len(open_now) >= R["max_positions"]:
+            note = f"All {R['max_positions']} positions are in use, so no new pick is made until one closes."
         elif not any(allowed(s) for s in buyable) and asof >= due:
             note = "No stock clears every check tonight. Holding cash is part of the plan; the screen looks again every night."
         elif asof >= due and doc.get("d") != asof:

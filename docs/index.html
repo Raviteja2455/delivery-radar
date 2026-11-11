@@ -316,7 +316,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         <p>The live strip shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR, with MCX gold (₹ per 10 g) and silver (₹ per kg) below, refreshed every 20 seconds while the app is open. A green dot means that market is trading now. GIFT Nifty, USD/INR and MCX are real time; crude runs 10 minutes behind. Each uses its most-traded contract, named after the label. When MCX trading moves to the next month ahead of expiry, the label changes month and the price shifts by the gap between the two contracts. Outside NSE hours the line under the strip compares GIFT Nifty with the close of the Nifty futures for the same month, which is the usual read on how the next session will open.</p>
         <p>The band at the top sets the size of swing trades. All of them are in cash, with no MTF. Green (an uptrend) means half size, because breakouts taken in green markets did worst in the 2020–26 backtests; amber and red mean full size. The Swing tab runs the full entry, sizing and exit rules on every stock and explains the evidence under <i>The rules this tab applies</i>.</p>
         <p>The Picks tab ranks every Nifty 100 stock each night and names one three-month swing pick every ten days, aiming for at least +5%. It then tracks every pick, and a replay of the same rule on past data, so you can see how often the target was reached. The Swing tab stays on the Nifty 50, the stocks its plan was tested on.</p>
-        <p>The Research tab screens the Nifty 500 (large, mid and small caps) for investments of six months to two years. It keeps only profitable, well-financed, growing companies, works out a fair value four ways, and names a stock only when the price is well below it and no longer falling. It sizes a ₹1 lakh portfolio in five equal slots and follows every pick to its exit. Most nights it names nothing: waiting for price is part of the method.</p>
+        <p>The Research tab screens the Nifty 500 (large, mid and small caps) for investments of six months to two years. It keeps only profitable, well-financed, growing companies, works out a fair value four ways, and names a stock only when the price is well below it and no longer falling. It puts ₹1 lakh into one stock at a time and follows every pick to its exit. Most nights it names nothing: waiting for price is part of the method.</p>
         <p>FII activity, inside the band, shows each session's net cash buying or selling by foreign investors (NSE's provisional figure) and how their index futures, calls and puts changed, from NSE's participant-wise open interest. A positive futures or calls number, or a negative puts number, is the bullish side. The verdict under the table weighs the latest day's cash, futures and options: when they all agree it says bullish or bearish, otherwise it leans with the majority. On Nifty's weekly expiry (marked *), option changes include contracts that simply expired. The tile beside VIX shows how much of FIIs' index-futures position is long.</p>
       </div>
     </details>
@@ -1289,7 +1289,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
 
   // ---------------------------------------------------------------- research: 6-month to 2-year investments
   // The nightly job screens the Nifty 500 on fundamentals, values each stock four ways and keeps a
-  // five-slot portfolio's log. Everything shown here comes from the data file; nothing is stored on the phone.
+  // research portfolio's log. Everything shown here comes from the data file; nothing is stored on the phone.
   const rstate = { status: "all" };
   let researchScroll = 0;
   const CAP = { L: "Large cap", M: "Mid cap", S: "Small cap" };
@@ -1316,7 +1316,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
       growth: `Sales growing ${plain(m.growth)}% a year, and not shrinking now`,
       strength: x.fin ? `Followed by ${m.analysts} or more analysts` : `Piotroski strength score ${m.pio} of 9 or more`,
       cash: x.fin ? "Return on assets 1% or more" : `Profit turns into free cash; accruals under ${plain(m.sloan)}% of assets`,
-      liquid: `Trades ₹${plain(m.turnover_cr)} cr a day; one share fits a slot`,
+      liquid: `Trades ₹${plain(m.turnover_cr)} cr a day; one share costs no more than the position`,
       value: `Price ${plain(x.mos)}% or more below fair value`,
       trend: "Close above the 200-day average",
       street: "Analysts' target not below the price",
@@ -1328,7 +1328,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
       growth: `5 years: sales ${signed(x.rev_c5, 1)} a year${x.eps_c5 != null ? `, earnings ${signed(x.eps_c5, 1)}` : ""}. Last 12 months: sales ${signed(x.rev_g, 1)}, earnings ${signed(x.eps_g, 1)}`,
       strength: x.fin ? `${x.street_n ?? 0} analysts. The screen can't read bad loans, so it wants a stock others examine` : x.pio != null ? `${x.pio} of 9` : "no score published",
       cash: x.fin ? `${fmt(x.roa, 2)}%` : (x.cash != null ? `Free cash flow is ${fmt(x.cash, 2)}× net profit` : "Positive operating cash flow") + (x.sloan != null ? `; accruals ${fmt(x.sloan, 1)}% of assets` : ""),
-      liquid: `Median turnover ₹${fmt(x.turn, 1)} cr a day; price ${rupees(x.c)} vs slot ${rupees(R.slot, 0)}`,
+      liquid: `Median turnover ₹${fmt(x.turn, 1)} cr a day; price ${rupees(x.c)} vs position ${rupees(R.slot, 0)}`,
       value: `${rupees(x.c)} is ${x.fv > x.c ? `${fmt((1 - x.c / x.fv) * 100, 0)}% below` : `${fmt((x.c / x.fv - 1) * 100, 0)}% above`} fair value of ${rupees(x.fv)}. Buy below ${rupees(x.bb)}`,
       trend: `${rupees(x.c)} vs ${rupees(x.sma200)}`,
       street: x.street_n >= m.analysts ? `${rupees(x.street)} (${x.street_n} analysts)` : "Too few analysts; not applied",
@@ -1379,7 +1379,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
       h("div", { class: "pk-head" }, rsTag(p.st), h("span", { class: "tag cap", style: "margin:0", text: CAP[p.cap] }), h("span", { class: "tag", text: HORIZON[p.hz] }),
         h("span", { class: "note", style: "margin:0", text: `Picked on the ${shortDate(p.d)} close · score ${fmt(p.sc, 0)}` })),
       h("div", { class: "plan" }, grid),
-      isNew ? h("p", { class: "note", text: `Reward to risk ${fmt(p.tgt_pct / p.stop_pct, 1)} to 1. If it opens above ${rupees(p.bb, 0)}, don't chase it: the pick lapses. The screen reads published numbers only, so check the latest results and news before you buy.` })
+      isNew ? h("p", { class: "note", text: `Reward to risk ${fmt(p.tgt_pct / p.stop_pct, 1)} to 1; a stop costs about ${rupees(qty * base * p.stop_pct / 100, 0)}. If it opens above ${rupees(p.bb, 0)}, don't chase it: the pick lapses. The screen reads published numbers only, so check the latest results and news before you buy.` })
             : !done ? h("p", { class: "note", text: `Sell on a close at or above ${rupees(target, 0)} or at or below ${rupees(stop, 0)}. The tab also tells you to sell if the business stops passing its checks or its fair value is cut down to the price.` }) : null,
       p.note ? h("p", { class: "note", text: `Sold because ${p.note}.` }) : null,
       owned ? h("p", { class: "note", text: "You already own this stock (it's in your Swing holdings), so this adds to it." }) : null,
@@ -1405,15 +1405,17 @@ td.hi { color: var(--deliv); font-weight: 600; }
     const invested = open.reduce((a, p) => a + cost(p), 0);
     const gain = open.reduce((a, p) => a + cost(p) * (p.ret || 0) / 100, 0);
     const booked = closed.reduce((a, p) => a + cost(p) * (p.ret || 0) / 100, 0);
-    const pot = R.rules.pot, total = gain + booked;
+    const pot = R.rules.pot, total = gain + booked, one = R.rules.max_positions === 1;
     const fd = R.fund_d ? shortDate(R.fund_d) : null;
     const why = [
-      `${rupeesShort(pot)} in ${R.rules.max_positions} equal slots of ${rupees(R.slot, 0)}. What isn't invested stays in cash.`,
+      one ? `${rupeesShort(pot)} goes into one stock at a time. Until a stock clears every check, it stays in cash.`
+          : `${rupeesShort(pot)} in ${R.rules.max_positions} equal parts of ${rupees(R.slot, 0)}. What isn't invested stays in cash.`,
       fd ? `Fundamentals as of ${fd}, for ${R.funnel.data} of ${R.funnel.universe} ${R.universe} stocks.` : "No fundamentals have arrived yet.",
       R.note || (R.due > DATA.asof && open.length < R.rules.max_positions ? `Next pick: the first night on or after ${longDate(R.due)} that a stock clears every check.` : null),
     ].filter(Boolean);
     return h("section", { class: "regime", "data-r": R.ready ? (open.length ? "green" : "amber") : "red" },
-      h("p", { class: "verdict" }, h("b", { text: `${open.length} of ${R.rules.max_positions}` }), " research slots in use"),
+      one ? h("p", { class: "verdict" }, h("b", { text: open.length ? open[0].s : "In cash" }), open.length ? " is the research holding" : ": no research pick open")
+          : h("p", { class: "verdict" }, h("b", { text: `${open.length} of ${R.rules.max_positions}` }), " research positions in use"),
       h("ul", { class: "why" }, why.map((t) => h("li", { text: t }))),
       h("div", { class: "figs" },
         fig("Invested", rupeesShort(invested), null, `${open.length} stock${open.length === 1 ? "" : "s"}`),
@@ -1473,8 +1475,10 @@ td.hi { color: var(--deliv); font-weight: 600; }
   function researchRules(R) {
     const r = R.rules, m = R.min, hd = R.hold, lt = R.long;
     const items = [
-      `Mandate. A separate ${rupeesShort(r.pot)} portfolio for holdings of six months to two years, beside your index fund and long-term shares, not instead of them. Cash delivery only, no leverage. At most ${r.max_positions} stocks of ${rupees(R.slot, 0)} each, no more than ${r.max_sector} in one sector and ${r.max_small} small caps. Cash is a position: nothing is bought just to be invested.`,
-      `Universe. The ${R.universe}: large caps are the Nifty 100, mid caps the Nifty Midcap 150, small caps the Nifty Smallcap 250. A stock must trade ₹${plain(m.turnover_cr)} cr a day and one share must fit a slot.`,
+      r.max_positions === 1
+        ? `Mandate. ${rupeesShort(r.pot)} for one holding of six months to two years, beside your index fund and long-term shares, not instead of them. Cash delivery only, no leverage. The whole amount goes into one stock at a time, and no second pick is named until it is sold. Until a stock clears every check, the money stays in cash. With everything in one stock, a stop costs about ${rupees(r.pot * r.stop_large / 100, 0)} on a large cap, ${rupees(r.pot * r.stop_mid / 100, 0)} on a mid cap and ${rupees(r.pot * r.stop_small / 100, 0)} on a small cap.`
+        : `Mandate. A separate ${rupeesShort(r.pot)} portfolio for holdings of six months to two years, beside your index fund and long-term shares, not instead of them. Cash delivery only, no leverage. At most ${r.max_positions} stocks of ${rupees(R.slot, 0)} each, no more than ${r.max_sector} in one sector and ${r.max_small} small caps. Cash is a position: nothing is bought just to be invested.`,
+      `Universe. The ${R.universe}: large caps are the Nifty 100, mid caps the Nifty Midcap 150, small caps the Nifty Smallcap 250. A stock must trade ₹${plain(m.turnover_cr)} cr a day and one share must cost no more than the position.`,
       `Quality first, all six. (1) Return on equity ${plain(m.roe)}% or more, ${plain(m.roe_fin)}% for financial companies. (2) Debt no more than ${plain(m.de)}× equity (${plain(m.de_small)}× for small caps) with interest covered ${plain(m.icov)}×. (3) Sales growing ${plain(m.growth)}% a year over five years, and neither sales nor earnings shrinking now. (4) A Piotroski strength score of ${m.pio} of 9 or more; a financial company must instead be followed by ${m.analysts} or more analysts, because the screen can't read bad loans. (5) Profit that turns into free cash, with accruals under ${plain(m.sloan)}% of assets; for financial companies, return on assets of 1% or more. (6) Enough turnover.`,
       "Never value a boom year. Earnings used are the last twelve months', but no more than last year's grown at the long-run rate, and no more than analysts expect next year. Return on equity is cut by the same amount. This keeps refiners, metal makers and lenders at the top of their cycle from looking cheap.",
       `Growth assumed. The lower of five-year sales and earnings growth, pulled down when the last year was slower, ${plain(r.growth_cap)}% at most. A financial company gets ${plain(r.growth_cap_lender)}% at most, and no more than its retained profit can fund.`,
