@@ -13,8 +13,8 @@ Every night the script also ranks all Nifty 100 stocks for a three-month swing p
 pick every ten days and tracks how each pick did; the pick log is data/picks.json.
 
 It also runs a research screen over the Nifty 500 (large, mid and small caps) for 6-month to
-2-year investments: quality checks, a fair value from four methods, and a buy only at a discount
-to it. Fundamentals come from TradingView's screener; the research log is data/research.json.
+2-year investments: quality checks, a fair value from four methods, and a buy only at a margin of
+safety below it. Fundamentals come from TradingView's screener; the research log is data/research.json.
 """
 from __future__ import annotations
 
@@ -54,10 +54,12 @@ URLS = {
     "fiidii": "https://www.nseindia.com/api/fiidiiTradeReact",
     "part": "https://nsearchives.nseindia.com/content/nsccl/fao_participant_oi_{d:%d%m%Y}.csv",
 }
-# Delivery history runs about nine months: the pick rule needs three months to warm up, and the
-# replay of past picks needs three more for each pick's result to be final.
+# The first run fills about ten months of delivery history: the pick rule needs three months to warm
+# up, and the replay of past picks needs three more for each pick's result to be final. Day files are
+# then kept for a little over two years, so a research pick can be worked out afresh every night from
+# its whole holding period.
 LOOKBACK = {"eq": 300, "fo": 45, "idx": 300, "part": 45}    # calendar days kept filled (first run backfills this)
-KEEP_DAYS = {"eq": 420, "fo": 90, "idx": 420, "part": 200}  # day files older than this are deleted
+KEEP_DAYS = {"eq": 800, "fo": 90, "idx": 800, "part": 200}  # day files older than this are deleted
 DEALS_KEEP = 200   # calendar days of bulk and block deals kept
 RECENT_DAYS = 5    # a failed download this recent stops the run; an older one only pauses the backfill
 FO_FLAG_DAYS = 21  # stored F&O days this recent are fetched again once if they lack the Nifty-expiry flag
@@ -94,21 +96,12 @@ TV_COLS = (
     "operating_margin_ttm", "net_margin_ttm",
     "dividends_yield_current", "dividend_payout_ratio_ttm", "dividend_payout_ratio_fy",
     "piotroski_f_score_ttm", "piotroski_f_score_fy", "altman_z_score_ttm", "altman_z_score_fy",
+    "sloan_ratio_ttm", "sloan_ratio_fy",
     "price_target_average", "price_target_median", "price_target_high", "price_target_low",
     "recommendation_total", "recommendation_mark", "earnings_per_share_forecast_next_fy",
     "SMA50", "SMA200", "price_52_week_high", "price_52_week_low", "Perf.3M", "Perf.6M", "Perf.Y",
     "average_volume_30d_calc", "float_shares_percent_current",
     "earnings_release_date", "earnings_release_next_date", "fiscal_period_end_current",
-    # PROBE (temporary): which forensic and lender readings does the screener have?
-    "beneish_m_score_fy", "beneish_m_score_ttm", "sloan_ratio_fy", "sloan_ratio_ttm", "graham_numbers_fy", "graham_numbers_ttm",
-    "nonperf_loans_loans_gross_fy", "nonperf_loans_loans_gross_fq", "loan_loss_coverage_fy", "loan_loss_rsrv_total_loans_fy",
-    "loans_net_total_deposits_fy", "efficiency_ratio_fy", "demand_deposits_total_deposits_fy", "net_interest_margin_fy",
-    "tier1_capital_ratio_fy", "total_capital_ratio_fy", "quality_ratio_fy", "fulmer_h_factor_fy", "zmijewski_score_fy",
-    "earnings_per_share_diluted_fy", "earnings_per_share_forecast_next_fq", "revenue_forecast_next_fy", "price_earnings_forward_fy",
-    "return_on_equity_5y_avg", "net_margin_5y_avg", "operating_margin_5y_avg", "net_margin_fy", "operating_margin_fy",
-    "return_on_equity_adjust_to_book_fy", "price_earnings_growth_ttm", "enterprise_value_ebitda_ttm", "price_free_cash_flow_ttm",
-    "total_shares_outstanding", "earnings_per_share_diluted_fq", "number_of_shareholders", "gross_margin_ttm",
-    "long_term_debt_to_equity_fy", "current_ratio_fy", "cash_n_short_term_invest_fy", "total_debt_fy", "ebitda_ttm",
 )
 TV_CHUNK = 250
 
@@ -197,13 +190,15 @@ def weekdays(start, end):
 PICK_DEFAULTS = {"every_days": 10, "target_pct": 5.0, "window_days": 91, "stop_pct": 8.0}
 
 
-# Research portfolio: 6-month to 2-year investments from the Nifty 500, bought only at a discount to fair
-# value. All percentages; config.json's "research" block overrides any of them.
+# Research portfolio: 6-month to 2-year investments from the Nifty 500, bought only at a margin of safety
+# below fair value. All percentages; config.json's "research" block overrides any of them.
 RESEARCH_DEFAULTS = {
     "pot": 100000, "max_positions": 5, "every_days": 14, "max_sector": 2, "max_small": 2,
-    "hurdle_large": 15.0, "hurdle_mid": 20.0, "hurdle_small": 25.0,   # discount to fair value needed to buy
+    "discount_large": 20.0, "discount_mid": 25.0, "discount_small": 30.0,  # margin of safety: % below fair value needed to buy
     "stop_large": 15.0, "stop_mid": 18.0, "stop_small": 22.0,         # closing-basis stop under the buy price
-    "coe_large": 12.0, "coe_mid": 13.0, "coe_small": 14.5,            # return demanded: bond yield + equity + size premium
+    # Return demanded: the 10-year government bond yield (about 7.3% in November 2026) plus roughly
+    # 5 points for owning shares, and more for smaller companies. Revisit when bond yields move a point.
+    "coe_large": 12.5, "coe_mid": 13.5, "coe_small": 15.0,
     "terminal_growth": 5.0, "growth_cap": 15.0, "growth_cap_lender": 12.0, "target_cap": 60.0,
     "medium_days": 365, "long_days": 730,
 }
@@ -229,7 +224,10 @@ def load_config():
                 "text": str(n["text"]),
                 "as_of": str(n.get("as_of", "")),
             }
-    return {"extra_symbols": extra, "notes": notes, "pick": pick, "research": research}
+    # Stocks kept out of research picks by hand, with the reason: what a screen can't read (a pledge,
+    # a governance question, bad loans) is recorded here after reading the company's own filings.
+    skip = {str(k).strip().upper(): str(v).strip() for k, v in (cfg.get("research_skip") or {}).items() if str(v).strip()}
+    return {"extra_symbols": extra, "notes": notes, "pick": pick, "research": research, "research_skip": skip}
 
 
 # ----------------------------------------------------------------------------- NSE access
@@ -1308,10 +1306,12 @@ def build_picks(adj, days, idx, meta, cfg, names, asof, make_picks=True):
 
 # ----------------------------------------------------------------------------- research screen
 # A fund manager's routine, written as fixed rules. 1) Quality first: only profitable, well-financed,
-# growing businesses. 2) Fair value from four independent methods; the middle of them is the estimate.
-# 3) Buy only at a discount to it, larger for smaller companies. 4) Never buy a falling stock.
-# 5) Small equal positions, spread across sectors. 6) Sell at the target, at the stop, when the
-# business stops passing the checks, or when time is up.
+# growing businesses whose profit shows up as cash. 2) Fair value from four independent methods; the
+# estimate is the second-lowest, so all but one must say the stock is worth at least that much.
+# 3) Buy only at a margin of safety below it, larger for smaller companies. 4) Never buy a falling
+# stock, or one about to report results. 5) Small equal positions, spread across sectors. 6) Sell at
+# the target, at the stop, when the business stops passing the checks, when fair value is cut down to
+# the price, or when time is up.
 CAPS = {"L": "large", "M": "mid", "S": "small"}
 RESEARCH_MIN = {                 # entry checks
     "roe": 15.0, "roe_fin": 13.0,          # return on equity, %
@@ -1319,11 +1319,15 @@ RESEARCH_MIN = {                 # entry checks
     "icov": 3.0,                           # operating profit covers interest this many times
     "growth": 8.0,                         # long-run sales growth, % a year
     "pio": 5,                              # Piotroski F-score, 0-9 (non-financials)
+    "sloan": 25.0,                         # accruals as % of assets (Sloan ratio): above this, profit is running ahead of cash
     "turnover_cr": 5.0,                    # median daily turnover, ₹ crore
     "lenses": 3,                           # fair-value methods that must be available
     "analysts": 5,                         # analysts needed before their target counts
+    "results_gap": 3,                      # no new pick when results are due within this many days
 }
 RESEARCH_HOLD = {"roe": 10.0, "de": 1.5, "pio": 3}   # a holding that breaks any of these is sold
+FV_CUT = 10.0                    # ...and so is one whose fair value has been cut this much, down to the price or below
+REPICK_DAYS = 90                 # a stock sold at a loss or on failed checks is not picked again for this long
 LONG_TERM = {"roe": 18.0, "growth": 12.0, "de": 0.5, "pio": 6}  # compounders get the 1-2 year horizon
 PE_CAP, LENS_CAP = 35.0, 2.0     # no method may use a P/E above 35 or put fair value above twice the price
 LONG_GROWTH = 12.0               # a 1-2 year target is fair value one year on, grown at this rate at most
@@ -1378,9 +1382,18 @@ def fund_rows(doc):
             "tgt": first("price_target_median", "price_target_average"),
             "tgt_n": first("recommendation_total"),
             "sma200": first("SMA200"), "p6m": first("Perf.6M"),
-            "next": first("earnings_release_next_date"),
+            "sloan": first("sloan_ratio_ttm", "sloan_ratio_fy"),
+            "next": epoch_day(first("earnings_release_next_date")),
         }
     return out
+
+
+def epoch_day(t):
+    """A Unix time as an Indian calendar date, or None."""
+    try:
+        return datetime.fromtimestamp(t, IST).date().isoformat() if t and t > 0 else None
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 def dcf_value(eps, roe, g1, r, g2):
@@ -1439,8 +1452,7 @@ def research_assess(sym, f, c, cap, fin, peers_pe, R):
     equity) are missing."""
     if not c or f["eps"] is None or f["eps"] <= 0 or f["roe"] is None:
         return None
-    key = {"L": "large", "M": "mid", "S": "small"}[cap]
-    r, hurdle = R["coe_" + key], R["hurdle_" + key]
+    r, mos = R["coe_" + CAPS[cap]], R["discount_" + CAPS[cap]]
     g = research_growth(f, R["growth_cap_lender"] if fin else R["growth_cap"], fin)
     eps = normal_eps(f, g)
     roe = f["roe"] * eps / f["eps"]  # return on equity on the same normalised earnings
@@ -1468,17 +1480,22 @@ def research_assess(sym, f, c, cap, fin, peers_pe, R):
     if fv:
         target = min(fv * (1 + min(g, LONG_GROWTH) / 100) if long_term else fv, c * (1 + R["target_cap"] / 100))
     return {
-        "g": g, "r": r, "hurdle": hurdle, "lens": lens, "n_lens": len(have), "fv": fv, "eps": eps, "roe": roe,
-        "up": pct(fv, c) if fv else None, "buy_below": fv / (1 + hurdle / 100) if fv else None,
+        "g": g, "r": r, "mos": mos, "lens": lens, "n_lens": len(have), "fv": fv, "eps": eps, "roe": roe,
+        "up": pct(fv, c) if fv else None, "buy_below": fv * (1 - mos / 100) if fv else None,
         "hz": "L" if long_term else "M", "target": target, "tgt_pct": pct(target, c) if target else None,
         "pe": c / f["eps"], "pe_n": c / eps, "pb": c / f["bvps"] if f["bvps"] and f["bvps"] > 0 else None,
     }
 
 
-def research_checks(f, a, cap, fin, turnover, c, sma200, slot):
+def research_checks(f, a, cap, fin, turnover, c, sma200, slot, asof):
     """The entry checklist as [key, passed] pairs, quality first. `a` is research_assess's result."""
     m = RESEARCH_MIN
     growth = f["rev_c5"] if f["rev_c5"] is not None else f["rev_g"]
+    if fin:
+        cash = f["roa"] is not None and f["roa"] >= 1.0
+    else:  # profit that turns into free cash, and is not mostly accruals
+        cash = (((f["fcf"] is not None and f["fcf"] > 0) or (f["fcf"] is None and f["cfo"] is not None and f["cfo"] > 0))
+                and (f["sloan"] is None or f["sloan"] <= m["sloan"]))
     q = [
         ["roe", a["roe"] >= (m["roe_fin"] if fin else m["roe"])],
         ["debt", True if fin else (f["de"] is not None and f["de"] <= (m["de_small"] if cap == "S" else m["de"])
@@ -1487,14 +1504,16 @@ def research_checks(f, a, cap, fin, turnover, c, sma200, slot):
                    and (f["eps_g"] is None or f["eps_g"] >= 0)],
         # The screen can't read a lender's bad loans, so it wants enough analysts watching instead.
         ["strength", (f["tgt_n"] or 0) >= m["analysts"] if fin else (f["pio"] is not None and f["pio"] >= m["pio"])],
-        ["cash", (f["roa"] is not None and f["roa"] >= 1.0) if fin else
-                 ((f["fcf"] is not None and f["fcf"] > 0) or (f["fcf"] is None and f["cfo"] is not None and f["cfo"] > 0))],
+        ["cash", cash],
         ["liquid", turnover is not None and turnover >= m["turnover_cr"] and c <= slot],
     ]
+    due_in = (date.fromisoformat(f["next"]) - date.fromisoformat(asof)).days if f["next"] else None
     rest = [
-        ["value", a["up"] is not None and a["up"] >= a["hurdle"]],
+        ["value", a["buy_below"] is not None and c <= a["buy_below"]],
         ["trend", sma200 is not None and c > sma200],
         ["street", a["lens"]["street"] is None or f["tgt"] >= c],
+        # Results within a few days can move the price and the fair value; wait for them.
+        ["results", not (due_in is not None and 0 <= due_in <= m["results_gap"])],
     ]
     return q, rest
 
@@ -1513,43 +1532,56 @@ def hold_broken(f, fin):
     return None
 
 
-def research_track(p, eq, days, asof):
-    """Move a research pick forward through the sessions since it was last looked at.
-
-    Works from the raw day files one session at a time and keeps its own split factor, so a holding
-    can be followed for two years without its whole price history being stored."""
-    if p.get("done"):
+def research_track(p, rows, asof):
+    """Work out a research pick from the stock's split-adjusted history, afresh every night, so a day
+    file that arrives late corrects it. Bought at the first open after the pick, but only if that open
+    is still at or below the buy-below price; otherwise the pick lapses. Sold at the close on the first
+    session that closes at or above the target, or at or below the stop, or once time is up."""
+    if p.get("done") or p.get("bb") is None or p.get("tgt") is None:
         return
-    for d in days:
-        if d <= p["ld"] or d > asof:
-            continue
-        row = eq[d].get(p["s"])
-        if not row or row[4] is None:
-            continue
-        pc, o, hi, lo, c = row[:5]
-        if p["st"] == "new":  # the first session after the pick: bought at its open
-            p.update({"st": "open", "ed": d, "e": o or c, "f": 1.0, "peak": 0.0, "low": 0.0})
-        elif pc and p["last"] and abs(pc / p["last"] - 1) > 0.02:
-            p["f"] *= pc / p["last"]  # a split or bonus: restate the buy price in today's shares
-        base = p["e"] * p["f"]
-        p["last"], p["ld"] = c, d
-        p["ret"] = rnd(pct(c, base))
-        p["peak"], p["low"] = rnd(max(p["peak"], pct(hi or c, base))), rnd(min(p["low"], pct(lo or c, base)))
-        held = (date.fromisoformat(d) - date.fromisoformat(p["ed"])).days
-        if p["ret"] >= p["tgt_pct"]:
-            p.update({"st": "target", "xd": d, "done": True})
-        elif p["ret"] <= -p["stop_pct"]:
-            p.update({"st": "stopped", "xd": d, "done": True})
-        elif held >= p["days"]:
-            p.update({"st": "timeup", "xd": d, "done": True})
-        if p.get("done"):
+    i = next((k for k in range(len(rows) - 1, -1, -1) if rows[k]["d"] == p["d"]), None)
+    if i is None or not rows[i]["c"] or i + 1 >= len(rows):
+        return  # the session after the pick has not traded yet
+    k = rows[i]["c"] / p["c0"]  # splits and bonuses since the pick: restate its prices in today's shares
+    first = rows[i + 1]
+    entry = first["o"] or first["c"]
+    if not entry:
+        return
+    target, limit = p["tgt"] * k, p["bb"] * k
+    p.update({"ed": first["d"], "e": rnd(entry), "k": round(k, 6), "tgt_px": rnd(target), "bb_px": rnd(limit),
+              "stop_px": rnd(entry * (1 - p["stop_pct"] / 100)), "tgt_pct": rnd(pct(target, entry), 1)})
+    if entry > limit:
+        p.update({"st": "lapsed", "xd": first["d"], "done": True, "last": rnd(first["c"]), "ld": first["d"], "ret": None})
+        return
+    peak = low = 0.0
+    state = "open"
+    for x in rows[i + 1:]:
+        if x["d"] > asof:
             break
+        if x["c"] is None:
+            continue
+        ret = pct(x["c"], entry)
+        peak, low = max(peak, pct(x["h"] or x["c"], entry)), min(low, pct(x["l"] or x["c"], entry))
+        p.update({"last": rnd(x["c"]), "ld": x["d"], "ret": rnd(ret), "peak": rnd(peak), "low": rnd(low)})
+        held = (date.fromisoformat(x["d"]) - date.fromisoformat(first["d"])).days
+        if x["c"] >= target:
+            state = "target"
+        elif ret <= -p["stop_pct"]:
+            state = "stopped"
+        elif held >= p["days"]:
+            state = "timeup"
+        if state != "open":
+            p.update({"xd": x["d"], "done": True})
+            break
+    p["st"] = state
 
 
-def build_research(eq, days, adj, idx, meta, cfg, names, asof, make_picks):
+def build_research(days, adj, idx, meta, cfg, names, asof, make_picks):
     """Screen the Nifty 500, keep the research portfolio's log up to date, and name a new pick when a
-    slot is free, one is due and a stock clears every check. Returns the app's "research" block."""
-    R = cfg["research"]
+    slot is free, one is due and a stock clears every check.
+
+    Returns the app's "research" block and, per stock, what its own page shows."""
+    R, skip = cfg["research"], cfg["research_skip"]
     doc = jload(DATA / "fund.json", {})
     fund = fund_rows(doc)
     n500 = meta.get("nifty500") or meta.get("nifty100") or []
@@ -1613,7 +1645,7 @@ def build_research(eq, days, adj, idx, meta, cfg, names, asof, make_picks):
         sma200 = avg(closes) if len(closes) >= 200 else f["sma200"]
         p6m = pct(c, rows[-127]["c"]) if len(rows) >= 127 and rows[-127]["c"] else f["p6m"]
         pf = pick_features(rows, len(rows) - 1)
-        q, rest = research_checks(f, a, cap, fin, turnover, c, sma200, slot)
+        q, rest = research_checks(f, a, cap, fin, turnover, c, sma200, slot, asof)
         cash = f["roa"] if fin else (f["fcf"] / f["ni"] if f["fcf"] is not None and f["ni"] and f["ni"] > 0 else None)
         cards[s] = {"f": f, "a": a, "c": c, "cap": cap, "fin": fin, "q": q, "rest": rest, "sma200": sma200,
                     "turnover": turnover, "quality": all(ok for _, ok in q), "all": all(ok for _, ok in q + rest),
@@ -1641,98 +1673,121 @@ def build_research(eq, days, adj, idx, meta, cfg, names, asof, make_picks):
     def row(s):  # what the app shows for one stock
         x = cards[s]
         f, a = x["f"], x["a"]
+        stop = R["stop_" + CAPS[x["cap"]]]
         return {
             "s": s, "n": names.get(s, {}).get("n", s), "ind": names.get(s, {}).get("ind", ""), "cap": x["cap"], "fin": int(x["fin"]),
-            "c": rnd(x["c"]), "fv": rnd(a["fv"]), "up": rnd(a["up"], 1), "bb": rnd(a["buy_below"]), "hurdle": a["hurdle"],
+            "c": rnd(x["c"]), "fv": rnd(a["fv"]), "up": rnd(a["up"], 1), "bb": rnd(a["buy_below"]), "mos": a["mos"],
             "hz": a["hz"], "tgt": rnd(a["target"]), "tgt_pct": rnd(a["tgt_pct"], 1),
-            "stop_pct": R["stop_" + CAPS[x["cap"]]], "sc": rnd(x.get("sc"), 1), "p": [whole(q) for q in x.get("p", [])],
+            "stop_pct": stop, "sc": rnd(x.get("sc"), 1), "p": [whole(q) for q in x.get("p", [])],
             "lens": {k: rnd(v) for k, v in a["lens"].items()}, "g": rnd(a["g"], 1), "r": a["r"],
             "pe": rnd(a["pe"], 1), "pe_n": rnd(a["pe_n"], 1), "eps_n": rnd(a["eps"]), "roe_n": rnd(a["roe"], 1),
             "pb": rnd(a["pb"], 1), "roe": rnd(f["roe"], 1), "roa": rnd(f["roa"], 1),
             "de": rnd(f["de"]), "icov": rnd(f["icov"], 1), "pio": whole(f["pio"]), "dy": rnd(f["dy"], 1),
             "rev_c5": rnd(f["rev_c5"], 1), "eps_c5": rnd(f["eps_c5"], 1), "rev_g": rnd(f["rev_g"], 1), "eps_g": rnd(f["eps_g"], 1),
-            "cash": rnd(x["read"]["cash"], 2), "p6m": rnd(x["read"]["p6m"], 1), "sma200": rnd(x["sma200"]),
+            "cash": rnd(x["read"]["cash"], 2), "sloan": rnd(f["sloan"], 1), "p6m": rnd(x["read"]["p6m"], 1), "sma200": rnd(x["sma200"]),
             "turn": rnd(x["turnover"], 1), "street": rnd(f["tgt"]), "street_n": whole(f["tgt_n"]),
-            "mcap": whole(f["mcap"] / 1e7) if f["mcap"] else None, "eps": rnd(f["eps"]),
+            "mcap": whole(f["mcap"] / 1e7) if f["mcap"] else None, "eps": rnd(f["eps"]), "next": f["next"],
+            "skip": skip.get(s),
             "q": [[k, int(ok)] for k, ok in x["q"]], "rest": [[k, int(ok)] for k, ok in x["rest"]],
         }
 
-    # The log: follow open picks, then check each one's business still passes.
+    # The log: work out each open pick, then check its business and its fair value still hold up.
     log = jload(DATA / "research.json", {})
     picks = [p for p in log.get("picks", []) if p.get("d") and p.get("s")]
     fresh = bool(doc.get("d")) and (date.fromisoformat(asof) - date.fromisoformat(doc["d"])).days <= 7
     for p in picks:
-        research_track(p, eq, days, asof)
-        if p["st"] == "open" and fresh and p["s"] in fund:
-            why = hold_broken(fund[p["s"]], p.get("fin"))
+        if adj.get(p["s"]):
+            research_track(p, adj[p["s"]], asof)
+        now = cards.get(p["s"])
+        if p["st"] == "open" and fresh and p["ld"] == asof:
+            why = hold_broken(fund[p["s"]], p.get("fin")) if p["s"] in fund else None
+            was = p["fv"] * p.get("k", 1.0)  # fair value on the day of the pick, in today's shares
             if why:
                 p.update({"st": "broken", "xd": asof, "done": True, "note": why})
-        i0 = index_on(p["d"], p.get("ikey", "nifty"))
+            elif now and now["a"]["fv"] <= now["c"] and now["a"]["fv"] <= was * (1 - FV_CUT / 100):
+                p.update({"st": "revalued", "xd": asof, "done": True,
+                          "note": f"fair value was cut from ₹{was:,.0f} to ₹{now['a']['fv']:,.0f}, which is no longer above the price"})
+        if p.get("i0") is None:
+            p["i0"] = index_on(p["d"], p.get("ikey", "nifty"))  # kept with the pick: index files are not stored for ever
         i1 = index_on(p.get("xd") or asof, p.get("ikey", "nifty"))
-        p["idx"] = rnd(pct(i1, i0)) if i0 and i1 and p["st"] != "new" else None
-        if s_now := cards.get(p["s"]):
-            p["fv_now"] = rnd(s_now["a"]["fv"])
+        p["idx"] = rnd(pct(i1, p["i0"])) if p["i0"] and i1 and p["st"] not in ("new", "lapsed") else None
+        if now and not p.get("done"):
+            p["fv_now"] = rnd(now["a"]["fv"])
 
-    # A new pick: at most one every `every_days`, only into a free slot, only if a stock clears everything.
-    open_now = [p for p in picks if not p.get("done")]
-    last_d = max((p["d"] for p in picks), default=None)
+    # A new pick: at most one every `every_days`, only into a free slot, only if a stock clears everything,
+    # and only on a night when the fundamentals and the prices are from the same session.
+    real = [p for p in picks if p["st"] != "lapsed"]
+    open_now = [p for p in real if not p.get("done")]
+    last_d = max((p["d"] for p in real), default=None)
     due = plus_days(last_d, R["every_days"]) if last_d else asof
     ready = bool(n500) and fresh and funnel["valued"] >= 0.5 * len(n500)
     note = None
     held = {p["s"] for p in open_now}
+    # No second try at a stock that just opened above its buy price, and none soon after a losing exit.
+    recent = {p["s"] for p in picks if p["st"] == "lapsed" and p["d"] > plus_days(asof, -R["every_days"])}
+    recent |= {p["s"] for p in real if p.get("done") and p["st"] != "target" and (p.get("xd") or p["d"]) > plus_days(asof, -REPICK_DAYS)}
     sectors = {}
     for p in open_now:
         sectors[p.get("ind", "")] = sectors.get(p.get("ind", ""), 0) + 1
     smalls = sum(1 for p in open_now if p.get("cap") == "S")
 
     def allowed(s):
-        x = cards[s]
-        note_ = cfg["notes"].get(s)
-        return (s not in held and not (note_ and note_["bias"] == -1)
+        return (s not in held and s not in recent and s not in skip
                 and sectors.get(names.get(s, {}).get("ind", ""), 0) < R["max_sector"]
-                and not (x["cap"] == "S" and smalls >= R["max_small"]))
+                and not (cards[s]["cap"] == "S" and smalls >= R["max_small"]))
 
     buyable = sorted((s for s in good if cards[s]["all"]), key=lambda s: (-cards[s]["sc"], s))
     if not ready:
         note = ("Fundamentals for the Nifty 500 haven't arrived or are more than a week old, so no research pick is made. "
                 "The screen resumes when the next snapshot comes in.")
-    elif make_picks and asof >= due and len(open_now) < R["max_positions"]:
+    elif make_picks and doc.get("d") == asof and asof >= due and len(open_now) < R["max_positions"]:
         s = next((s for s in buyable if allowed(s)), None)
         if s:
             x, r = cards[s], row(s)
             ikey = "n500" if idx.get(asof, {}).get("n500") else "nifty"
-            picks.append({"d": asof, "s": s, "n": r["n"], "cap": x["cap"], "ind": r["ind"], "fin": x["fin"], "hz": r["hz"],
-                          "c0": r["c"], "fv": r["fv"], "up": r["up"], "tgt_pct": max(r["tgt_pct"], r["hurdle"]),
-                          "stop_pct": r["stop_pct"], "days": R["long_days"] if r["hz"] == "L" else R["medium_days"],
-                          "sc": r["sc"], "why": r, "st": "new", "ld": asof, "last": x["c"], "ikey": ikey})
+            new = {"d": asof, "s": s, "n": r["n"], "cap": x["cap"], "ind": r["ind"], "fin": x["fin"], "hz": r["hz"],
+                   "c0": r["c"], "fv": r["fv"], "up": r["up"], "bb": r["bb"], "tgt": r["tgt"], "tgt_pct": r["tgt_pct"],
+                   "stop_pct": r["stop_pct"], "days": R["long_days"] if r["hz"] == "L" else R["medium_days"],
+                   "sc": r["sc"], "why": r, "st": "new", "ld": asof, "last": r["c"], "ikey": ikey,
+                   "i0": index_on(asof, ikey), "idx": None, "fv_now": r["fv"]}
+            picks.append(new)
+            real.append(new)
+            open_now.append(new)
             due = plus_days(asof, R["every_days"])
     if ready and not note:
-        if len([p for p in picks if not p.get("done")]) >= R["max_positions"]:
+        if len(open_now) >= R["max_positions"]:
             note = f"All {R['max_positions']} slots are in use, so no new pick is made until one closes."
-        elif not buyable and asof >= due:
+        elif not any(allowed(s) for s in buyable) and asof >= due:
             note = "No stock clears every check tonight. Holding cash is part of the plan; the screen looks again every night."
     jsave(DATA / "research.json", {"picks": sorted(picks, key=lambda p: p["d"])})
 
-    done = [p for p in picks if p.get("done")]
-    live = [p for p in picks if p["st"] == "open"]
+    done = [p for p in real if p.get("done")]
+    live = [p for p in real if p["st"] == "open"]
     hits = [p for p in done if p["st"] == "target"]
     stats = {
-        "n": len(picks), "open": len(live), "new": sum(1 for p in picks if p["st"] == "new"), "closed": len(done),
+        "n": len(real), "open": len(live), "new": sum(1 for p in real if p["st"] == "new"), "closed": len(done),
         "target": len(hits), "stopped": sum(1 for p in done if p["st"] == "stopped"),
-        "broken": sum(1 for p in done if p["st"] == "broken"), "timeup": sum(1 for p in done if p["st"] == "timeup"),
+        "broken": sum(1 for p in done if p["st"] in ("broken", "revalued")), "timeup": sum(1 for p in done if p["st"] == "timeup"),
+        "lapsed": len(picks) - len(real),
         "hit": rnd(len(hits) / len(done) * 100, 1) if done else None,
         "avg": rnd(avg([p["ret"] for p in done])), "open_avg": rnd(avg([p["ret"] for p in live])),
-        "vs": rnd(avg([p["ret"] - p["idx"] for p in done if p.get("idx") is not None])),
+        "vs": rnd(avg([p["ret"] - p["idx"] for p in done if p.get("idx") is not None and p.get("ret") is not None])),
     }
     waiting = sorted((s for s in good if not cards[s]["all"]), key=lambda s: -(cards[s]["a"]["up"] or -999))
-    return {
+    block = {
         "rules": R, "min": RESEARCH_MIN, "hold": RESEARCH_HOLD, "long": LONG_TERM, "pe_cap": PE_CAP,
+        "fv_cut": FV_CUT, "repick_days": REPICK_DAYS, "long_growth": LONG_GROWTH,
         "parts": [[k, w, label] for k, w, label in RESEARCH_PARTS],
         "fund_d": doc.get("d"), "ready": ready, "note": note, "due": due, "slot": slot,
         "universe": "Nifty 500" if meta.get("nifty500") else "Nifty 100", "funnel": funnel,
         "buy": [row(s) for s in buyable[:10]], "watch": [row(s) for s in waiting[:15]],
         "picks": sorted(picks, key=lambda p: p["d"], reverse=True), "stats": stats,
     }
+    # A stock's own page: the full valuation if it passes the quality checks, otherwise which checks it fails.
+    # A fair value for a business that fails them would rest on numbers the screen itself doesn't trust.
+    own = {s: ({"ok": 1, **row(s)} if cards[s]["quality"] else
+               {"ok": 0, "fin": int(cards[s]["fin"]), "fails": [k for k, ok in cards[s]["q"] if not ok]}) for s in cards}
+    return block, own
 
 
 def build(make_picks=False):
@@ -1761,7 +1816,7 @@ def build(make_picks=False):
     for sym in sorted({s for d in days for s in eq[d]}):
         adj[sym] = adjusted_rows([(d, eq[d][sym]) for d in days if sym in eq[d]])
     picks, tonight = build_picks(adj, days, idx, meta, cfg, names, asof, make_picks)
-    research = build_research(eq, days, adj, idx, meta, cfg, names, asof, make_picks)
+    research, own = build_research(days, adj, idx, meta, cfg, names, asof, make_picks)
 
     stocks = []
     for sym in universe:
@@ -1771,6 +1826,7 @@ def build(make_picks=False):
         st = stock_metrics(sym, rows, fo, deals, det_days, names, cfg["notes"])
         st["grp"] = 50 if sym in n50 else 100 if sym in n100 else 0  # Nifty 50, Next 50, or added by hand
         st["pk"] = tonight.get(sym)
+        st["rs"] = own.get(sym)
         stocks.append(st)
 
     out = {
@@ -1794,6 +1850,9 @@ def build(make_picks=False):
     newest = next((x for x in picks["list"] if x["src"] == "live"), None)
     print(f"Built {OUT.relative_to(ROOT)}: {len(stocks)} stocks, data as of {asof}; "
           + (f"latest pick {newest['s']} ({newest['d']}), next due {picks['due']}" if newest else "no pick yet"))
+    f, held = research["funnel"], [p for p in research["picks"] if not p.get("done")]
+    print(f"Research: {f['quality']} of {f['universe']} pass the quality checks, {f['buy']} in the buy zone; "
+          + (f"holding {', '.join(p['s'] for p in held)}" if held else "no open research pick"))
 
 
 def main():

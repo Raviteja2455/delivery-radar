@@ -11,7 +11,7 @@ import random
 import shutil
 import sys
 import zipfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 SYMBOLS = {  # symbol: (company, industry, starting price)
@@ -267,6 +267,10 @@ def main(out, last):
             "dividends_yield_current": frnd.uniform(0, 3), "piotroski_f_score_ttm": frnd.randint(7, 9) if gem else frnd.randint(2, 9),
             "price_target_average": c * frnd.uniform(1.15 if gem else 0.9, 1.45), "recommendation_total": frnd.randint(0, 40),
             "SMA200": c * (frnd.uniform(0.85, 0.99) if gem else frnd.uniform(0.85, 1.15)), "Perf.6M": frnd.uniform(-20, 35),
+            "sloan_ratio_fy": frnd.uniform(-5, 14) if gem else frnd.uniform(-8, 32),
+            # next results: a Unix time some days either side of the last sample day
+            "earnings_release_next_date": int(datetime(last.year, last.month, last.day, 12, tzinfo=timezone.utc).timestamp())
+                                          + 86400 * (frnd.randint(8, 70) if gem else frnd.randint(-20, 70)),
         }
         tv["rows"]["NSE:" + "".join(ch if ch.isalnum() else "_" for ch in s)] = row
     (out / "tv_scan.json").write_text(json.dumps(tv))
