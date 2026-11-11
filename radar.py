@@ -8,6 +8,9 @@
 Data comes from NSE's public end-of-day files: security-wise delivery (sec_bhavdata_full),
 the F&O bhavcopy, index closes, bulk/block deals, participant-wise F&O open interest and the
 provisional FII/DII figures. History is kept as one small JSON file per trading day under data/.
+
+Every night the script also ranks all Nifty 100 stocks for a three-month swing pick, names one
+pick every ten days and tracks how each pick did; the pick log is data/picks.json.
 """
 from __future__ import annotations
 
@@ -20,6 +23,7 @@ import re
 import sys
 import time
 import zipfile
+from bisect import bisect_left, bisect_right
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -34,13 +38,20 @@ URLS = {
     "fo": "https://nsearchives.nseindia.com/content/fo/BhavCopy_NSE_FO_0_0_0_{d:%Y%m%d}_F_0000.csv.zip",
     "idx": "https://nsearchives.nseindia.com/content/indices/ind_close_all_{d:%d%m%Y}.csv",
     "n50": "https://nsearchives.nseindia.com/content/indices/ind_nifty50list.csv",
+    "n100": "https://nsearchives.nseindia.com/content/indices/ind_nifty100list.csv",
+    "nn50": "https://nsearchives.nseindia.com/content/indices/ind_niftynext50list.csv",
+    "n100_alt": "https://www.niftyindices.com/IndexConstituent/ind_nifty100list.csv",
     "bulk": "https://nsearchives.nseindia.com/content/equities/bulk.csv",
     "block": "https://nsearchives.nseindia.com/content/equities/block.csv",
     "fiidii": "https://www.nseindia.com/api/fiidiiTradeReact",
     "part": "https://nsearchives.nseindia.com/content/nsccl/fao_participant_oi_{d:%d%m%Y}.csv",
 }
-LOOKBACK = {"eq": 110, "fo": 45, "idx": 300, "part": 45}    # calendar days kept filled (first run backfills this)
-KEEP_DAYS = {"eq": 200, "fo": 90, "idx": 420, "part": 200}  # day files older than this are deleted
+# Delivery history runs about nine months: the pick rule needs three months to warm up, and the
+# replay of past picks needs three more for each pick's result to be final.
+LOOKBACK = {"eq": 280, "fo": 45, "idx": 300, "part": 45}    # calendar days kept filled (first run backfills this)
+KEEP_DAYS = {"eq": 420, "fo": 90, "idx": 420, "part": 200}  # day files older than this are deleted
+DEALS_KEEP = 200   # calendar days of bulk and block deals kept
+RECENT_DAYS = 5    # a failed download this recent stops the run; an older one only pauses the backfill
 FO_FLAG_DAYS = 21  # stored F&O days this recent are fetched again once if they lack the Nifty-expiry flag
 FII_DAYS = 6       # sessions shown in the app's FII table
 # participant-wise OI columns kept, in this order, per category per day
@@ -136,8 +147,17 @@ def weekdays(start, end):
         d += timedelta(days=1)
 
 
+# Three-month swing pick: one stock every `every_days` calendar days, aiming for `target_pct` within
+# `window_days`, with a closing-basis stop `stop_pct` under the entry. config.json's "pick" block overrides these.
+PICK_DEFAULTS = {"every_days": 10, "target_pct": 5.0, "window_days": 91, "stop_pct": 8.0}
+
+
 def load_config():
     cfg = jload(ROOT / "config.json", {})
+    pick = dict(PICK_DEFAULTS)
+    for k, v in (cfg.get("pick") or {}).items():
+        if k in pick and isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
+            pick[k] = int(v) if k in ("every_days", "window_days") else float(v)
     extra = [str(s).strip().upper() for s in cfg.get("extra_symbols", []) if str(s).strip()]
     notes = {}
     for sym, n in (cfg.get("notes") or {}).items():
@@ -148,7 +168,7 @@ def load_config():
                 "text": str(n["text"]),
                 "as_of": str(n.get("as_of", "")),
             }
-    return {"extra_symbols": extra, "notes": notes}
+    return {"extra_symbols": extra, "notes": notes, "pick": pick}
 
 
 # ----------------------------------------------------------------------------- NSE access
@@ -321,6 +341,46 @@ def parse_fiidii(text):
 
 
 # ----------------------------------------------------------------------------- update
+def fetch_n100(src, n50):
+    """The Nifty 100 list: NSE's own file, else Nifty 50 + Nifty Next 50, else the copy on niftyindices.com.
+
+    Returns [] when none of them answers with a list that looks right (about 100 names, the Nifty 50 among them)."""
+    have = {x["s"] for x in n50}
+
+    def good(rows):
+        syms = {x["s"] for x in rows}
+        return 90 <= len(syms) <= 110 and len(have & syms) >= 40
+
+    def read(key):
+        try:
+            text = src.get(URLS[key])
+        except RuntimeError as e:
+            print(f"{key} list unavailable: {e}")
+            return []
+        return parse_n50(text) if text else []
+
+    rows = read("n100")
+    if good(rows):
+        return rows
+    nxt = read("nn50")
+    if nxt:
+        seen, both = set(), []
+        for x in n50 + nxt:
+            if x["s"] not in seen:
+                seen.add(x["s"])
+                both.append(x)
+        if good(both):
+            return both
+    rows = read("n100_alt")
+    return rows if good(rows) else []
+
+
+def tracked_symbols(doc, today, rules):
+    """Symbols of live picks still inside their three-month window."""
+    cut = (today - timedelta(days=rules["window_days"] + 30)).isoformat()
+    return {p["s"] for p in doc.get("picks", []) if p.get("d", "") >= cut and p.get("s")}
+
+
 def holiday_copies(eq):
     """Stored days whose delivery file repeats the previous stored day's exactly.
 
@@ -345,8 +405,19 @@ def update(src, today=None):
     names = meta.get("names", {})
     for x in n50:
         names[x["s"]] = {"n": x["n"], "ind": x["ind"]}
+    n100 = fetch_n100(src, n50)
+    if n100:
+        meta["nifty100"] = [x["s"] for x in n100]
+        for x in n100:
+            names[x["s"]] = {"n": x["n"], "ind": x["ind"]}
+    elif meta.get("nifty100"):
+        print("NSE did not send the Nifty 100 list today; using the list saved earlier.")
+    else:
+        print("NSE did not send the Nifty 100 list; tonight covers the Nifty 50 only and no pick is made.")
     meta["names"] = names
-    universe = sorted(set(meta["nifty50"]) | set(cfg["extra_symbols"]))
+    # Stocks with a live pick stay in the downloads even if they leave the index, so the pick can be tracked.
+    tracked = tracked_symbols(jload(DATA / "picks.json", {}), today, cfg["pick"])
+    universe = sorted(set(meta["nifty50"]) | set(meta.get("nifty100", [])) | set(cfg["extra_symbols"]) | tracked)
     uset = set(universe)
 
     missing = {k: set(v) for k, v in meta.get("missing", {}).items()}
@@ -362,7 +433,8 @@ def update(src, today=None):
         print(f"Removed eq {iso}: it repeated the previous session's file, so it was a holiday")
 
     for kind in ("eq", "idx", "fo", "part"):  # eq first: it tells us which weekdays were holidays
-        for d in weekdays(today - timedelta(days=LOOKBACK[kind]), today):
+        # Newest day first, so tonight's files are in before any long backfill starts.
+        for d in reversed(list(weekdays(today - timedelta(days=LOOKBACK[kind]), today))):
             iso = d.isoformat()
             if iso in missing[kind] or (kind != "eq" and iso in missing["eq"]):
                 continue
@@ -373,9 +445,19 @@ def update(src, today=None):
                     pass  # fetch again: symbols were added since this day was saved
                 elif kind == "fo" and "_nx" not in stored and d >= today - timedelta(days=FO_FLAG_DAYS):
                     pass  # fetch again once to record whether Nifty options expired that day
+                elif kind == "fo" and not uset <= set(stored.get("_u", [])):
+                    pass  # fetch again: symbols were added since this day was saved
                 else:
                     continue
-            blob = src.get(URLS[kind].format(d=d), binary=(kind == "fo"))
+            try:
+                blob = src.get(URLS[kind].format(d=d), binary=(kind == "fo"))
+            except RuntimeError as e:
+                if d >= today - timedelta(days=RECENT_DAYS):
+                    raise
+                # NSE sometimes stops answering part-way through a long backfill. Keep what arrived;
+                # the next run carries on from here.
+                print(f"{kind}: stopped back-filling at {iso}; the next run continues ({e})")
+                break
             if blob is None:
                 if d < today - timedelta(days=3):  # NSE publishes the same evening; older gaps are holidays
                     missing[kind].add(iso)
@@ -399,6 +481,7 @@ def update(src, today=None):
                 if rows:
                     jsave(path, {"u": universe, "rows": rows})
             elif kind == "fo":
+                rows["_u"] = universe
                 jsave(path, rows)
             elif rows:
                 jsave(path, rows)
@@ -417,7 +500,7 @@ def update(src, today=None):
             if key not in seen:
                 seen.add(key)
                 deals.append(x)
-    cut = (today - timedelta(days=KEEP_DAYS["eq"])).isoformat()
+    cut = (today - timedelta(days=DEALS_KEEP)).isoformat()
     jsave(DATA / "deals.json", sorted((x for x in deals if x["d"] >= cut), key=lambda x: (x["d"], x["s"])))
 
     flows = jload(DATA / "fiidii.json", {})
@@ -776,11 +859,280 @@ def fii_view(r, streak, pos):
     return {"verdict": verdict, "text": text}
 
 
+# ----------------------------------------------------------------------------- three-month swing pick
+# One stock every ten days from the Nifty 100, aiming for +5% inside three months. The rule looks for a
+# stock already in an uptrend that funds are taking delivery of, and avoids one that has just run.
+# It reads only prices and delivery, so it can be replayed over the stored history.
+PICK_HISTORY = 63          # sessions of history a stock needs before it can be ranked (about three months)
+PICK_COVERAGE = 0.8        # share of the universe that must be rankable before a pick is made
+PICK_MAX_EXT = 8.0         # gate: not more than this % above the 20-day average, or up this much in 5 sessions
+PICK_PARTS = (             # reading, weight in the 0-100 score, label
+    ("r63", 30, "3-month return"),
+    ("r21", 15, "1-month return"),
+    ("dl", 25, "Delivery % last 10 sessions vs the 50 before"),
+    ("net", 15, "Accumulation minus distribution days (last 20)"),
+    ("near", 15, "Distance from the 3-month high"),
+)
+
+
+def pick_features(rows, i):
+    """Trend, momentum and delivery readings for one stock at session i, or None without enough history."""
+    if i is None or i < PICK_HISTORY:
+        return None
+    win = rows[i - PICK_HISTORY:i + 1]  # 64 sessions, the pick day last
+    cl = [x["c"] for x in win]
+    if any(v is None or v <= 0 for v in cl):
+        return None
+    dp = [x["dp"] for x in win]
+    c = cl[-1]
+    sma20, sma50, sma50_then = avg(cl[-20:]), avg(cl[-50:]), avg(cl[-60:-10])
+    dp10, dp_base = avg(dp[-10:]), avg(dp[-60:-10])
+    acc = dist = 0  # up days and down days on above-average delivery, last 20 sessions
+    for j in range(len(win) - 20, len(win)):
+        base = avg(dp[j - 20:j])
+        ch = pct(win[j]["c"], win[j]["pc"])
+        if base is None or dp[j] is None or not ch or dp[j] <= base:
+            continue
+        if ch > 0:
+            acc += 1
+        else:
+            dist += 1
+    hi63 = max([x["h"] for x in win if x["h"] is not None] + [c])
+    f = {
+        "c": c, "r63": pct(c, cl[0]), "r21": pct(c, cl[-22]), "r5": pct(c, cl[-6]),
+        "dl": (dp10 / dp_base - 1) * 100 if dp10 and dp_base else None,
+        "dp10": dp10, "dpb": dp_base, "acc": acc, "dist": dist, "net": acc - dist,
+        "near": pct(c, hi63), "s50": sma50, "up": 1 if sma50 > sma50_then else 0, "ext": pct(c, sma20),
+    }
+    # The gates: above a rising 50-day average, and not stretched.
+    f["ok"] = 1 if (c > sma50 and f["up"] and f["ext"] <= PICK_MAX_EXT and f["r5"] <= PICK_MAX_EXT) else 0
+    return f
+
+
+def pick_scores(feats):
+    """Add a 0-100 score to each stock's readings: its percentile among the ranked stocks on each
+    reading, weighted. Returns the symbols, best first."""
+    syms = sorted(feats)
+    n = len(syms)
+    for s in syms:
+        feats[s]["p"] = []
+    for key, _, _ in PICK_PARTS:
+        vals = {s: (feats[s][key] if feats[s][key] is not None else -math.inf) for s in syms}
+        ranked = sorted(vals.values())
+        for s in syms:
+            below = bisect_left(ranked, vals[s])
+            ties = bisect_right(ranked, vals[s]) - below - 1
+            feats[s]["p"].append((below + ties / 2) / (n - 1) * 100 if n > 1 else 50.0)
+    for s in syms:
+        feats[s]["sc"] = sum(w * q for (_, w, _), q in zip(PICK_PARTS, feats[s]["p"])) / 100
+    return sorted(syms, key=lambda s: (-feats[s]["sc"], s))
+
+
+def pick_candidates(adj, pos, symbols, day):
+    """Readings and scores for every rankable stock on `day`: ({symbol: readings}, symbols best first)."""
+    feats = {}
+    for s in symbols:
+        f = pick_features(adj[s], pos[s].get(day)) if s in adj else None
+        if f:
+            feats[s] = f
+    return feats, pick_scores(feats) if feats else []
+
+
+def pick_choose(feats, order, day, recent, notes):
+    """The best-scoring stock that passes the gates, was not picked within the window, and has no
+    negative institutional note dated on or before `day`."""
+    for s in order:
+        note = notes.get(s)
+        barred = note and note["bias"] == -1 and (not note["as_of"] or note["as_of"] <= day)
+        if feats[s]["ok"] and s not in recent and not barred:
+            return s
+    return None
+
+
+def pick_why(f):
+    """The pick's readings as stored and shown: value and percentile for each scored part."""
+    return {"sc": rnd(f["sc"], 1), "v": [rnd(f[k], 2) for k, _, _ in PICK_PARTS], "p": [whole(q) for q in f["p"]],
+            "acc": f["acc"], "dist": f["dist"], "dp10": rnd(f["dp10"], 1), "dpb": rnd(f["dpb"], 1),
+            "s50": rnd(f["s50"]), "ext": rnd(f["ext"], 1), "r5": rnd(f["r5"], 1)}
+
+
+def plus_days(iso, n):
+    return (date.fromisoformat(iso) + timedelta(days=n)).isoformat()
+
+
+def pick_outcome(rows, i, rules, asof, nifty_on):
+    """How a pick made at session i did. Bought at the next session's open; sold at the target the
+    first time the day's high reaches it; out at the close on the first close at or below the stop;
+    otherwise held to the last session inside the window."""
+    out = {"st": "new", "c": rnd(rows[i]["c"]), "ed": None, "e": None, "t": None, "sl": None, "dl": None,
+           "last": rnd(rows[i]["c"]), "ld": rows[i]["d"], "ret": None, "hold": None, "peak": None, "low": None,
+           "hd": None, "xd": None, "days": None, "nif": None, "vs": None}
+    if i + 1 >= len(rows):
+        return out  # the entry session has not traded yet
+    first = rows[i + 1]
+    entry = first["o"] or first["c"]
+    if not entry:
+        return out
+    ed, dl = first["d"], plus_days(first["d"], rules["window_days"])
+    target, stop = entry * (1 + rules["target_pct"] / 100), entry * (1 - rules["stop_pct"] / 100)
+    peak = low = 0.0
+    hit = stopped = None
+    last, ld = entry, ed
+    for x in rows[i + 1:]:
+        if x["d"] > dl or x["c"] is None:
+            break
+        hi, lo = x["h"] or x["c"], x["l"] or x["c"]
+        peak, low = max(peak, pct(hi, entry)), min(low, pct(lo, entry))
+        last, ld = x["c"], x["d"]
+        if hit is None:
+            if hi >= target:
+                hit = x["d"]
+            elif x["c"] <= stop:
+                stopped = x["d"]
+                break
+    held = pct(last, entry)
+    if hit:
+        st, ret, end = "target", rules["target_pct"], hit
+    elif stopped:
+        st, ret, end = "stopped", held, stopped
+    elif asof >= dl:
+        st, ret, end = "timeup", held, ld
+    else:
+        st, ret, end = "open", held, ld
+    n0, n1 = nifty_on(rows[i]["d"]), nifty_on(end)
+    nif = pct(n1, n0) if n0 and n1 else None
+    out.update({"st": st, "ed": ed, "e": rnd(entry), "t": rnd(target), "sl": rnd(stop), "dl": dl,
+                "last": rnd(last), "ld": ld, "ret": rnd(ret), "hold": rnd(held), "peak": rnd(peak), "low": rnd(low),
+                "hd": hit, "xd": end if st in ("stopped", "timeup") else None,
+                "days": (date.fromisoformat(end) - date.fromisoformat(ed)).days,
+                "nif": rnd(nif), "vs": rnd(ret - nif) if nif is not None else None})
+    return out
+
+
+CLOSED = ("target", "stopped", "timeup")
+
+
+def pick_stats(items, base):
+    """Summary of a set of picks, with `base`: every ranked stock bought on the same dates under the same exits."""
+    done = [x for x in items if x["st"] in CLOSED]
+    live = [x for x in items if x["st"] == "open"]
+    hits = [x for x in done if x["st"] == "target"]
+    bdone = [x for x in base if x["st"] in CLOSED]
+    return {
+        "n": len(items), "closed": len(done), "target": len(hits),
+        "stopped": sum(1 for x in done if x["st"] == "stopped"), "timeup": sum(1 for x in done if x["st"] == "timeup"),
+        "open": len(live), "new": sum(1 for x in items if x["st"] == "new"),
+        "hit": rnd(len(hits) / len(done) * 100, 1) if done else None,
+        "avg": rnd(avg([x["ret"] for x in done])), "vs": rnd(avg([x["vs"] for x in done])),
+        "days": rnd(avg([x["days"] for x in hits]), 0), "open_avg": rnd(avg([x["ret"] for x in live])),
+        "base_n": len(bdone), "base_hit": rnd(sum(1 for x in bdone if x["st"] == "target") / len(bdone) * 100, 1) if bdone else None,
+        "base_avg": rnd(avg([x["ret"] for x in bdone])),
+    }
+
+
+def build_picks(adj, days, idx, meta, cfg, names, asof):
+    """Make tonight's pick if one is due, replay the rule over the stored history, and score both.
+
+    Returns the app's "picks" block and each ranked stock's readings for tonight. Live picks are kept
+    in data/picks.json with their latest result, so they outlast the day files they were scored from."""
+    rules = cfg["pick"]
+    n100 = meta.get("nifty100") or []
+    pool = sorted(set(n100) & set(adj))
+    pos = {s: {x["d"]: i for i, x in enumerate(rows)} for s, rows in adj.items()}
+    idays = sorted(d for d in idx if idx[d].get("nifty"))
+
+    def nifty_on(d):  # Nifty close on d, or on the last session before it
+        k = bisect_right(idays, d)
+        return idx[idays[k - 1]]["nifty"] if k else None
+
+    def enough(feats):
+        return len(n100) >= 90 and len(feats) >= PICK_COVERAGE * len(n100)
+
+    def item(d, s, why, res, src, r):
+        return {"d": d, "s": s, "n": names.get(s, {}).get("n", s), "src": src, "why": why,
+                "rules": {k: r[k] for k in ("target_pct", "stop_pct", "window_days")}, **res}
+
+    doc = jload(DATA / "picks.json", {})
+    live = [p for p in doc.get("picks", []) if p.get("d") and p.get("s")]
+    feats, order = pick_candidates(adj, pos, pool, asof)
+    ready = enough(feats)
+
+    # Tonight's pick, when one is due.
+    last_d = max((p["d"] for p in live), default=None)
+    due = plus_days(last_d, rules["every_days"]) if last_d else asof
+    note = None
+    if not ready:
+        note = ("The Nifty 100 list or its three months of history isn't complete yet, so no pick is made. "
+                "It fills in over the next nightly runs.")
+    elif asof >= due:
+        cut = plus_days(asof, -rules["window_days"])
+        s = pick_choose(feats, order, asof, {p["s"] for p in live if p["d"] >= cut}, cfg["notes"])
+        if s:
+            live.append({"d": asof, "s": s, "why": pick_why(feats[s]), "rules": dict(rules)})
+            due = plus_days(asof, rules["every_days"])
+        else:
+            note = "A pick is due, but no Nifty 100 stock passes the trend checks tonight. The rule looks again every night."
+
+    out, base = [], {"live": [], "bt": []}
+
+    def everyone(day, r, group):  # the comparison: every ranked stock bought on the same day, same exits
+        for s in pool:
+            i = pos[s].get(day)
+            if i is not None and i >= PICK_HISTORY:
+                base[group].append(pick_outcome(adj[s], i, r, asof, nifty_on))
+
+    for p in live:
+        r = {**rules, **(p.get("rules") or {})}
+        i = pos.get(p["s"], {}).get(p["d"])
+        if i is not None:
+            p["res"] = pick_outcome(adj[p["s"]], i, r, asof, nifty_on)
+            everyone(p["d"], r, "live")
+        if p.get("res"):  # older than the stored history: keep the last result worked out
+            out.append(item(p["d"], p["s"], p.get("why"), p["res"], "live", r))
+    jsave(DATA / "picks.json", {"picks": sorted(live, key=lambda p: p["d"])})
+
+    # Replay: the same rule on the same ten-day grid, counted back from the first live pick.
+    anchor = min((p["d"] for p in live), default=asof)
+    grid, g = [], plus_days(anchor, -rules["every_days"])
+    while days and g >= days[0]:
+        grid.append(g)
+        g = plus_days(g, -rules["every_days"])
+    grid.reverse()
+    past = []
+    for k, g in enumerate(grid):
+        end = grid[k + 1] if k + 1 < len(grid) else anchor
+        for d in (x for x in days if g <= x < end):
+            f, o = pick_candidates(adj, pos, pool, d)
+            if not enough(f):
+                continue
+            cut = plus_days(d, -rules["window_days"])
+            s = pick_choose(f, o, d, {q["s"] for q in past if q["d"] >= cut}, cfg["notes"])
+            if s:
+                past.append({"d": d, "s": s})
+                out.append(item(d, s, pick_why(f[s]), pick_outcome(adj[s], pos[s][d], rules, asof, nifty_on), "bt", rules))
+                everyone(d, rules, "bt")
+                break
+
+    out.sort(key=lambda x: (x["d"], x["src"] == "live"), reverse=True)
+    block = {
+        "rules": rules, "ready": ready, "note": note, "due": due,
+        "parts": [[k, w, label] for k, w, label in PICK_PARTS],
+        "max_ext": PICK_MAX_EXT, "ranked": len(feats), "passing": sum(1 for s in feats if feats[s]["ok"]),
+        "top": [s for s in order if feats[s]["ok"]][:5],
+        "list": out,
+        "stats": {g: pick_stats([x for x in out if x["src"] == g], base[g]) for g in ("live", "bt")},
+        "from": days[0] if days else None,
+    }
+    tonight = {s: {**pick_why(feats[s]), "ok": feats[s]["ok"], "up": feats[s]["up"], "rank": order.index(s) + 1} for s in feats}
+    return block, tonight
+
+
 def build():
     meta = jload(DATA / "meta.json", {})
     cfg = load_config()
     names = meta.get("names", {})
-    universe = sorted(set(meta.get("nifty50", [])) | set(cfg["extra_symbols"]))
+    n50, n100 = set(meta.get("nifty50", [])), set(meta.get("nifty100", []))
+    universe = sorted(n50 | n100 | set(cfg["extra_symbols"]))
     eq = {p.stem: jload(p, {}).get("rows", {}) for p in sorted((DATA / "eq").glob("*.json"))}
     copies = holiday_copies(eq)  # never let a holiday copy count as a session, even if one is stored
     days = sorted(d for d in eq if eq[d] and d not in copies)
@@ -794,12 +1146,21 @@ def build():
     asof = days[-1]
     det_days = days[-DETAIL_DAYS:]
 
+    # Split-adjusted history for every stored symbol; picked stocks that left the index are in here too.
+    adj = {}
+    for sym in sorted({s for d in days for s in eq[d]}):
+        adj[sym] = adjusted_rows([(d, eq[d][sym]) for d in days if sym in eq[d]])
+    picks, tonight = build_picks(adj, days, idx, meta, cfg, names, asof)
+
     stocks = []
     for sym in universe:
-        series = [(d, eq[d][sym]) for d in days if sym in eq[d]]
-        if not series or series[-1][0] != asof:
+        rows = adj.get(sym)
+        if not rows or rows[-1]["d"] != asof:
             continue  # did not trade on the latest day
-        stocks.append(stock_metrics(sym, adjusted_rows(series), fo, deals, det_days, names, cfg["notes"]))
+        st = stock_metrics(sym, rows, fo, deals, det_days, names, cfg["notes"])
+        st["grp"] = 50 if sym in n50 else 100 if sym in n100 else 0  # Nifty 50, Next 50, or added by hand
+        st["pk"] = tonight.get(sym)
+        stocks.append(st)
 
     out = {
         "asof": asof,
@@ -810,13 +1171,17 @@ def build():
         "market": market_summary(idx, flows, stocks, asof),
         "fii": fii_activity(days, flows, part, fo, asof),
         "stocks": stocks,
+        "picks": picks,
+        "universe": "Nifty 100" if len(n100) >= 90 else "Nifty 50",
         "deals": [x for x in deals if x["d"] >= det_days[0]][-80:],
         "have": {"fo": asof in fo, "idx": asof in idx, "flows": asof in flows, "part": "FII" in part.get(asof, {})},
         "mtf": {"stop_buffer_pct": STOP_BUFFER * 100, "min_stop_pct": MIN_STOP_PCT},
-        "extra": [s for s in cfg["extra_symbols"] if s not in set(meta.get("nifty50", []))],
+        "extra": [s for s in cfg["extra_symbols"] if s not in n50 | n100],
     }
     jsave(OUT, out)
-    print(f"Built {OUT.relative_to(ROOT)}: {len(stocks)} stocks, data as of {asof}")
+    newest = next((x for x in picks["list"] if x["src"] == "live"), None)
+    print(f"Built {OUT.relative_to(ROOT)}: {len(stocks)} stocks, data as of {asof}; "
+          + (f"latest pick {newest['s']} ({newest['d']}), next due {picks['due']}" if newest else "no pick yet"))
 
 
 def main():

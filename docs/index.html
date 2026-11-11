@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Delivery Radar</title>
-<meta name="description" content="Nifty 50 delivery percentage, volume, futures buildup and bulk/block deals, refreshed every weekday night from NSE.">
+<meta name="description" content="Nifty 100 delivery percentage, volume, futures buildup, bulk/block deals and a three-month swing pick every ten days, refreshed every weekday night from NSE.">
 <meta name="theme-color" content="#F3F5F8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0F1A2B" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2315233B'/%3E%3Crect x='6' y='13' width='20' height='6' rx='1.5' fill='%23D6DFF5'/%3E%3Crect x='6' y='13' width='13' height='6' rx='1.5' fill='%237EA2FF'/%3E%3C/svg%3E">
@@ -207,6 +207,21 @@ td.hi { color: var(--deliv); font-weight: 600; }
 .rules li { margin-bottom: 8px; }
 .tag.mtf { color: var(--signal); }
 
+/* picks */
+.pk-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pk-head .tag { font-size: 13px; }
+.pk-line { margin: 10px 0 0; font-size: 14px; }
+.pk-line b { font-weight: 600; }
+.pk-tbl td:first-child { font: 600 15px/1.2 var(--font-c); }
+.pk-tbl td small { display: block; font: 400 12px var(--font); color: var(--ink-2); }
+.pk-tbl tr.go { cursor: pointer; }
+.pk-tbl tr.go:active td { background: var(--paper); }
+.pk-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 10px; }
+.pk-bar .chips { flex: 1 1 100%; min-width: 0; padding: 0; }
+.pk-bar select { flex: 0 0 auto; border: 1px solid var(--rule); background: var(--sheet); border-radius: 10px; padding: 7px 8px; font-size: 14px; }
+.card .chips { padding-bottom: 10px; }
+.card .figs { margin: 2px 0 4px; }
+
 /* live cues */
 .live { background: var(--sheet); border-radius: 12px; padding: 9px 14px 12px; margin: 12px 0 0; }
 .live-top { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); min-height: 28px; }
@@ -238,7 +253,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
   .figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: no-preference) {
-  #detail:not([hidden]), #mtf-view:not([hidden]) { animation: rise .18s ease-out; }
+  #detail:not([hidden]), #mtf-view:not([hidden]), #picks-view:not([hidden]) { animation: rise .18s ease-out; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   .lf .v.tick-up { animation: tickup 1.6s ease-out; }
   .lf .v.tick-dn { animation: tickdn 1.6s ease-out; }
@@ -257,6 +272,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
     <nav class="tabs" aria-label="Views">
       <button class="tab" id="tab-stocks" type="button" aria-selected="true">Stocks</button>
       <button class="tab" id="tab-mtf" type="button" aria-selected="false">Swing<span class="n" id="mtf-count"></span></button>
+      <button class="tab" id="tab-picks" type="button" aria-selected="false">Picks<span class="n" id="picks-count"></span></button>
     </nav>
     <section class="live" id="live" aria-label="Live market cues">
       <div class="live-top"><span class="beat" aria-hidden="true"></span><span class="when">Fetching live quotes…</span></div>
@@ -273,6 +289,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         <ol id="sig-help"></ol>
         <p>The live strip shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR, with MCX gold (₹ per 10 g) and silver (₹ per kg) below, refreshed every 20 seconds while the app is open. A green dot means that market is trading now. GIFT Nifty, USD/INR and MCX are real time; crude runs 10 minutes behind. Each uses its most-traded contract, named after the label. When MCX trading moves to the next month ahead of expiry, the label changes month and the price shifts by the gap between the two contracts. Outside NSE hours the line under the strip compares GIFT Nifty with the close of the Nifty futures for the same month, which is the usual read on how the next session will open.</p>
         <p>The band at the top sets the size of swing trades. All of them are in cash, with no MTF. Green (an uptrend) means half size, because breakouts taken in green markets did worst in the 2020–26 backtests; amber and red mean full size. The Swing tab runs the full entry, sizing and exit rules on every stock and explains the evidence under <i>The rules this tab applies</i>.</p>
+        <p>The Picks tab ranks every Nifty 100 stock each night and names one three-month swing pick every ten days, aiming for at least +5%. It then tracks every pick, and a replay of the same rule on past data, so you can see how often the target was reached. The Swing tab stays on the Nifty 50, the stocks its plan was tested on.</p>
         <p>FII activity, inside the band, shows each session's net cash buying or selling by foreign investors (NSE's provisional figure) and how their index futures, calls and puts changed, from NSE's participant-wise open interest. A positive futures or calls number, or a negative puts number, is the bullish side. The verdict under the table weighs the latest day's cash, futures and options: when they all agree it says bullish or bearish, otherwise it leans with the majority. On Nifty's weekly expiry (marked *), option changes include contracts that simply expired. The tile beside VIX shows how much of FIIs' index-futures position is long.</p>
       </div>
     </details>
@@ -294,6 +311,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
     </footer>
   </main>
   <main id="mtf-view" hidden></main>
+  <main id="picks-view" hidden></main>
   <main id="detail" hidden></main>
 </div>
 
@@ -355,6 +373,8 @@ td.hi { color: var(--deliv); font-weight: 600; }
 
   const FILTERS = [
     ["all", "All", () => true],
+    ["n50", "Nifty 50", (s) => s.grp === 50],
+    ["nn50", "Next 50", (s) => s.grp === 100],
     ["mtf", "Swing ready", (s) => evaluate(s).status === "ready"],
     ["score", "Score 4+", (s) => s.score >= 4],
     ["spike", "Delivery spike", (s) => (s.dqx ?? 0) >= 1.5],
@@ -366,6 +386,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
   const desc = (k) => (a, b) => (b[k] ?? -Infinity) - (a[k] ?? -Infinity);
   const SORTS = {
     score: ["Score", (a, b) => b.score - a.score || (b.dpd ?? -99) - (a.dpd ?? -99)],
+    pick: ["3-month pick score", (a, b) => (b.pk ? b.pk.sc : -1) - (a.pk ? a.pk.sc : -1)],
     dp: ["Delivery %", desc("dp")],
     dpd: ["Delivery vs 20-day avg", desc("dpd")],
     dqx: ["Delivered qty vs 5-day avg", desc("dqx")],
@@ -540,15 +561,16 @@ td.hi { color: var(--deliv); font-weight: 600; }
       } });
     D.replaceChildren(
       h("div", { class: "dtop" },
-        h("button", { class: "back", type: "button", text: "‹ All stocks",
+        h("button", { class: "back", type: "button", text: "‹ Back",
           onclick: () => { if (cameFromList) history.back(); else location.hash = ""; } }),
         watchBtn),
       h("h2", { class: "dsym", text: st.s }),
       h("p", { class: "dname", text: [st.n, st.ind].filter(Boolean).join(", ") }),
       h("p", { class: "dpx" }, h("span", { text: rupees(st.c) }), h("span", { class: "chg " + dir(st.chg), text: signed(st.chg) })),
-      signalsCard(st), mtfCard(st), snapshotCard(st), chartCard(st), deliverablesCard(st), futuresCard(st), dealsCard(st));
+      signalsCard(st), mtfCard(st), pickScoreCard(st), snapshotCard(st), chartCard(st), deliverablesCard(st), futuresCard(st), dealsCard(st));
     $("#list-view").hidden = true;
     $("#mtf-view").hidden = true;
+    $("#picks-view").hidden = true;
     D.hidden = false;
     window.scrollTo(0, 0);
     drawChart(st);
@@ -748,12 +770,15 @@ td.hi { color: var(--deliv); font-weight: 600; }
         val: held ? "It's in your holdings" : inOpen ? "You already have a swing trade in it" : "Not held" },
       { label: `A free slot (max ${s.maxPos}, ${s.maxSector} per sector)`, ok: open.length < s.maxPos && inSector < s.maxSector,
         val: `${open.length} of ${s.maxPos} open, ${inSector} in ${st.ind || "this sector"}` },
+      // Plan v2 was tested on Nifty 50 stocks only, so Nifty Next 50 stocks are left to the Picks tab.
+      { label: "In the Nifty 50, where this plan was tested", ok: st.grp !== 100,
+        val: st.grp === 100 ? "Nifty Next 50 stock; the Picks tab ranks it" : st.grp === 0 ? "A stock you added" : "Yes" },
     ];
     const entryMissing = checks.slice(0, 4).filter((c) => !c.ok).length;
     const personalOk = checks.slice(4).every((c) => c.ok);
     const why = held ? "you already own it" : inOpen ? "you already have a swing trade in it"
       : st.note && st.note.bias === -1 ? "skip, negative institutional note"
-      : !checks[6].ok ? "no free slot" : "not a candidate today";
+      : !checks[6].ok ? "no free slot" : !checks[7].ok ? "outside the Nifty 50, where the swing plan was tested" : "not a candidate today";
     return { checks, why, status: personalOk && entryMissing === 0 ? "ready" : personalOk && entryMissing === 1 ? "near" : "no" };
   }
   function plan(st) {
@@ -1029,6 +1054,205 @@ td.hi { color: var(--deliv); font-weight: 600; }
       ...ready.map(([st, ev]) => candidateCard(st, ev)),
       nearCard(near), positionsCard(), addFormCard(), settingsCard(), rulesCard(), backupCard(),
       h("p", { class: "foot", text: "Checks run on NSE's closing data, so act in the next session. For information only, not investment advice." }));
+  }
+
+  // ---------------------------------------------------------------- picks: a three-month swing pick every ten days
+  // The nightly job ranks every Nifty 100 stock, names a pick when one is due and scores every pick it has
+  // made, plus a replay of the same rule on the stored history. Nothing here is stored on the phone.
+  const pstate = { group: null, status: "all", sort: "new" };
+  let picksScroll = 0;
+  const PICK_STATUS = { new: ["Buy at next open", "mtf"], open: ["Open", ""], target: ["Target hit", "lb"],
+    stopped: ["Stopped out", "sb"], timeup: ["Time up", ""] };
+  const longDate = (iso) => dt(iso, { day: "numeric", month: "short", year: "numeric" });
+  const openStock = (sym) => {
+    if (!DATA.stocks.some((x) => x.s === sym)) return;
+    picksScroll = window.scrollY; cameFromList = true;
+    location.hash = "s=" + encodeURIComponent(sym);
+  };
+  const statusTag = (st) => h("span", { class: "tag " + PICK_STATUS[st][1], text: PICK_STATUS[st][0] });
+  const plain = (x) => String(Number(x));  // 5.0 -> "5", 7.5 -> "7.5"
+
+  // The five scored readings and the two gates, for a pick or for any stock tonight.
+  function whyBlock(w, close) {
+    const P = DATA.picks, lim = P.max_ext;
+    const vals = [
+      signed(w.v[0], 1), signed(w.v[1], 1),
+      `${fmt(w.dp10, 1)}% vs ${fmt(w.dpb, 1)}%`,
+      `${w.acc} up, ${w.dist} down`,
+      w.v[4] != null && w.v[4] > -0.05 ? "at the high" : signed(w.v[4], 1),
+    ];
+    const gates = [
+      { label: "Above a rising 50-day average", ok: close > w.s50 && (w.up ?? 1) === 1,
+        val: `Close ${rupees(close)} vs ${rupees(w.s50)}; the average is ${(w.up ?? 1) ? "rising" : "falling"}` },
+      { label: "Not stretched after a run", ok: w.ext <= lim && w.r5 <= lim,
+        val: `${signed(w.ext, 1)} from the 20-day average, ${signed(w.r5, 1)} in 5 sessions (limit +${plain(lim)}% each)` },
+    ];
+    return [
+      h("div", { class: "tbl" }, h("table", {},
+        h("thead", {}, h("tr", {}, ["Reading", "Value", "Weight", "Beats"].map((t) => h("th", { scope: "col", text: t })))),
+        h("tbody", {}, P.parts.map(([, wt, label], i) => h("tr", {},
+          h("td", { style: "white-space:normal;font:400 13.5px var(--font)", text: label }),
+          h("td", { text: vals[i] }), h("td", { text: wt }),
+          h("td", { class: w.p[i] >= 67 ? "hi" : null, text: `${w.p[i]}%` })))))),
+      h("p", { class: "note", text: "Beats: the share of ranked Nifty 100 stocks this one is ahead of on that reading. The score is the weighted average." }),
+      h("ul", { class: "checks" }, gates.map(checkItem)),
+    ];
+  }
+  function pickScoreCard(st) {
+    if (!DATA.picks || !st.pk) return null;
+    const w = st.pk, n = DATA.picks.ranked;
+    return h("details", { class: "card" },
+      h("summary", { text: `3-month pick score: ${fmt(w.sc, 0)} of 100, rank ${w.rank} of ${n}` }),
+      h("p", { class: "note", style: "margin-top:0", text: w.ok
+        ? "Passes both trend checks, so it can be picked when a pick is due."
+        : "Fails a trend check tonight, so it can't be picked whatever its score." }),
+      whyBlock(w, st.c));
+  }
+  function latestPickCard(P) {
+    const p = P.list.find((x) => x.src === "live");
+    if (!p) {
+      return h("section", { class: "card" }, h("h3", { text: "No pick yet" }),
+        h("p", { class: "note", style: "margin-top:0", text: P.note || "The first pick is made by the next nightly run." }));
+    }
+    const st = DATA.stocks.find((x) => x.s === p.s), r = p.rules || P.rules, isNew = p.st === "new";
+    const cell = (k, v, sub) => h("div", {}, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub ? h("div", { class: "s", text: sub }) : null);
+    const tp = plain(r.target_pct), sp = plain(r.stop_pct), months = Math.round(r.window_days / 30.4);
+    const grid = isNew
+      ? [cell("Buy", "Next session's open", `last close ${rupees(p.c)}`),
+         cell("Target", `about ${rupees(p.c * (1 + r.target_pct / 100), 0)}`, `+${tp}% from your buy price`),
+         cell("Stop", `about ${rupees(p.c * (1 - r.stop_pct / 100), 0)}`, `${MINUS}${sp}%, on a closing basis`),
+         cell("Exit by", `${months} months on`, "if neither is reached")]
+      : [cell("Bought", rupees(p.e), `open of ${shortDate(p.ed)}`),
+         cell("Target", rupees(p.t), `+${tp}%` + (p.hd ? `, reached ${shortDate(p.hd)}` : "")),
+         cell("Stop", rupees(p.sl), `${MINUS}${sp}%, on a closing basis`),
+         cell("Exit by", longDate(p.dl), "if neither is reached"),
+         cell(p.st === "open" ? "So far" : "Result", signed(p.ret), `last ${rupees(p.last)}, ${shortDate(p.ld)}`),
+         cell("Best / worst", `${signed(p.peak, 1)} / ${signed(p.low, 1)}`, "since the buy")];
+    const owned = S().holdings.includes(p.s);
+    return h("article", { class: "cand" },
+      h("h3", {}, h("span", { text: p.s }),
+        st ? h("span", { class: "px" }, rupees(st.c) + " ", h("span", { class: "chg " + dir(st.chg), text: signed(st.chg) })) : null),
+      h("p", { class: "sub", text: [p.n, st && st.ind].filter(Boolean).join(", ") }),
+      h("div", { class: "pk-head" }, statusTag(p.st),
+        h("span", { class: "note", style: "margin:0", text: `Picked on the ${shortDate(p.d)} close · score ${fmt(p.why.sc, 0)} of 100` })),
+      h("div", { class: "plan" }, grid),
+      owned ? h("p", { class: "note", text: "You already own this stock (it's in your Swing holdings), so buying it adds to that position." }) : null,
+      h("details", { style: "margin-top:10px" }, h("summary", { style: "cursor:pointer;color:var(--deliv);font-weight:500;font-size:14px", text: "Why this stock" }),
+        h("div", { style: "margin-top:10px" }, whyBlock(p.why, p.c))),
+      h("div", { class: "btns" }, st ? h("button", { class: "btn small ghost", type: "button", text: "Stock details", onclick: () => openStock(p.s) }) : null));
+  }
+  function nextPickLine(P) {
+    const latest = P.list.find((x) => x.src === "live");
+    const txt = P.note && latest ? P.note
+      : latest && P.due > DATA.asof ? `Next pick: the first trading night on or after ${longDate(P.due)}.` : null;
+    return txt ? h("p", { class: "market", style: "margin:12px 2px 0", text: txt }) : null;
+  }
+  function rankCard(P) {
+    const top = P.top.map((s) => DATA.stocks.find((x) => x.s === s)).filter((x) => x && x.pk);
+    const card = h("section", { class: "card" }, h("h3", { text: "Tonight's ranking" }));
+    card.append(h("p", { class: "note", style: "margin-top:0", text: `${P.passing} of ${P.ranked} ranked ${DATA.universe || "Nifty 100"} stocks pass both trend checks tonight. ` +
+      (top.length ? "The best five by score:" : "") }));
+    if (!top.length) return card;
+    card.append(h("div", { class: "tbl" }, h("table", { class: "pk-tbl" },
+      h("thead", {}, h("tr", {}, ["Stock", "Score", "3-mo", "1-mo", "Delivery", "From high"].map((t) => h("th", { scope: "col", text: t })))),
+      h("tbody", {}, top.map((st) => h("tr", { class: "go", onclick: () => openStock(st.s) },
+        h("td", {}, st.s, h("small", { text: rupees(st.c) })),
+        h("td", { class: "hi", text: fmt(st.pk.sc, 0) }),
+        h("td", { class: dir(st.pk.v[0]), text: signed(st.pk.v[0], 1) }),
+        h("td", { class: dir(st.pk.v[1]), text: signed(st.pk.v[1], 1) }),
+        h("td", { class: dir(st.pk.v[2]), text: signed(st.pk.v[2], 1) }),
+        h("td", { text: signed(st.pk.v[4], 1) })))))));
+    card.append(h("p", { class: "note", text: "Delivery: the last 10 sessions' average delivery % against the 50 before. Tap a stock for its full readings. Sort the Stocks tab by \"3-month pick score\" to see all of them." }));
+    return card;
+  }
+  function performanceCard(P) {
+    const G = P.stats[pstate.group], r = P.rules, tp = plain(r.target_pct);
+    const groups = [["live", "Live picks"], ["bt", "Back-test"]];
+    const card = h("section", { class: "card", id: "pick-perf" }, h("h3", { text: "How the picks have done" }),
+      h("div", { class: "chips", role: "toolbar", "aria-label": "Which picks" }, groups.map(([k, label]) =>
+        h("button", { class: "chip", type: "button", "aria-pressed": String(pstate.group === k),
+          onclick: () => { pstate.group = k; pstate.status = "all"; renderPicks(true); } }, label, h("span", { class: "n", text: P.stats[k].n })))));
+    card.append(h("p", { class: "note", style: "margin:0 0 10px", text: pstate.group === "live"
+      ? "Picks the nightly run has actually published, bought at the next session's open."
+      : `The same rule replayed on stored NSE data from ${P.from ? longDate(P.from) : "the start of the history"}, one pick every ${r.every_days} days. Nobody traded these, and today's Nifty 100 list is used throughout.` }));
+    if (!G.n) { card.append(h("p", { class: "empty", text: pstate.group === "live" ? "No live picks yet." : "Not enough stored history to replay the rule yet." })); return card; }
+    card.append(h("div", { class: "figs" },
+      fig("Picks", String(G.n), null, `${G.closed} closed`),
+      fig(`Reached +${tp}%`, G.hit != null ? `${fmt(G.hit, 0)}%` : "–", null, G.closed ? `${G.target} of ${G.closed}` : "none closed"),
+      fig("Avg result", signed(G.avg), null, "closed picks"),
+      fig("vs Nifty 50", signed(G.vs), null, "same days")));
+    const lines = [];
+    if (G.closed) {
+      lines.push(`${G.target} reached the target${G.days != null ? ` (in ${fmt(G.days, 0)} days on average)` : ""}, ${G.stopped} stopped out, ${G.timeup} ran out of time.`);
+      const be = r.stop_pct / (r.stop_pct + r.target_pct) * 100;
+      lines.push(`With a +${tp}% target and a ${MINUS}${plain(r.stop_pct)}% stop, about ${fmt(be, 0)}% of closed picks must reach the target just to break even.`);
+    }
+    if (G.base_n) lines.push(`Comparison: every ranked stock bought on the same dates with the same exits reached the target ${fmt(G.base_hit, 0)}% of the time and averaged ${signed(G.base_avg)} (${G.base_n} closed). The rule is only useful if it beats this.`);
+    if (G.open) lines.push(`${G.open} still open, averaging ${signed(G.open_avg)} so far.`);
+    if (G.closed && G.closed < 20) lines.push(`${G.closed} closed picks is too few to judge the rule; early closes are mostly quick winners and quick stops.`);
+    for (const t of lines) card.append(h("p", { class: "pk-line", text: t }));
+    return card;
+  }
+  function screenerCard(P) {
+    const all = P.list.filter((x) => x.src === pstate.group);
+    const filters = [["all", "All", () => true], ["open", "Open", (x) => x.st === "open" || x.st === "new"],
+      ["target", "Target hit", (x) => x.st === "target"], ["stopped", "Stopped out", (x) => x.st === "stopped"], ["timeup", "Time up", (x) => x.st === "timeup"]];
+    const sorts = { new: ["Newest", (a, b) => (a.d < b.d ? 1 : -1)], best: ["Best result", (a, b) => (b.ret ?? -1e9) - (a.ret ?? -1e9)],
+      worst: ["Worst result", (a, b) => (a.ret ?? 1e9) - (b.ret ?? 1e9)], peak: ["Highest peak", (a, b) => (b.peak ?? -1e9) - (a.peak ?? -1e9)],
+      fast: ["Fastest to target", (a, b) => (a.st === "target" ? a.days : 1e9) - (b.st === "target" ? b.days : 1e9)] };
+    const rows = all.filter(filters.find(([k]) => k === pstate.status)[2]).sort(sorts[pstate.sort][1]);
+    const sel = h("select", { "aria-label": "Sort picks by", onchange: (e) => { pstate.sort = e.target.value; renderPicks(true); } },
+      Object.entries(sorts).map(([k, [label]]) => h("option", { value: k, text: label, selected: pstate.sort === k })));
+    const card = h("section", { class: "card", id: "pick-screen" }, h("h3", { text: `Pick screener: ${pstate.group === "live" ? "live picks" : "back-test"}` }),
+      h("div", { class: "pk-bar" },
+        h("div", { class: "chips", role: "toolbar", "aria-label": "Filter picks" }, filters.map(([k, label, fn]) =>
+          h("button", { class: "chip", type: "button", "aria-pressed": String(pstate.status === k),
+            onclick: () => { pstate.status = k; renderPicks(true); } }, label, h("span", { class: "n", text: all.filter(fn).length })))),
+        sel));
+    if (!rows.length) { card.append(h("p", { class: "empty", text: "No picks match." })); return card; }
+    card.append(h("div", { class: "tbl" }, h("table", { class: "pk-tbl" },
+      h("thead", {}, h("tr", {}, ["Stock", "Bought", "Last / exit", "Result", "Best", "Worst", "Days", "vs Nifty", "Status"].map((t) => h("th", { scope: "col", text: t })))),
+      h("tbody", {}, rows.map((p) => h("tr", { class: DATA.stocks.some((x) => x.s === p.s) ? "go" : null, onclick: () => openStock(p.s) },
+        h("td", {}, p.s, h("small", { text: `picked ${shortDate(p.d)}` })),
+        h("td", {}, p.e != null ? price(p.e) : "–", h("small", { text: p.ed ? shortDate(p.ed) : "next open" })),
+        h("td", {}, p.st === "target" ? price(p.t) : price(p.last), h("small", { text: shortDate(p.st === "target" ? p.hd : p.ld) })),
+        h("td", { class: dir(p.ret), text: signed(p.ret) }),
+        h("td", { class: dir(p.peak), text: signed(p.peak, 1) }),
+        h("td", { class: dir(p.low), text: signed(p.low, 1) }),
+        h("td", { text: p.days != null ? String(p.days) : "–" }),
+        h("td", { class: dir(p.vs), text: signed(p.vs, 1) }),
+        h("td", {}, statusTag(p.st))))))));
+    card.append(h("p", { class: "note", text: "Result: the target gain once it is reached, the loss at the stop, or the gain so far. Best and worst are the highest high and lowest low since the buy. Days are calendar days from the buy. vs Nifty compares the result with the Nifty 50's move over the same days. Prices are adjusted for splits and bonuses." }));
+    return card;
+  }
+  function pickRulesCard(P) {
+    const r = P.rules, tp = plain(r.target_pct), sp = plain(r.stop_pct), w = P.parts.map((x) => x[1]);
+    const items = [
+      `Universe: the ${DATA.universe || "Nifty 100"}, ranked every night after NSE's closing files arrive.`,
+      `Two trend checks come first: the close is above a rising 50-day average, and the stock is not stretched (no more than ${plain(P.max_ext)}% above its 20-day average or up more than ${plain(P.max_ext)}% in 5 sessions).`,
+      `Score out of 100: 3-month return (${w[0]}), 1-month return (${w[1]}), delivery % over the last 10 sessions against the 50 before (${w[2]}), up days minus down days on above-average delivery (${w[3]}) and closeness to the 3-month high (${w[4]}). Each is the stock's percentile among the ranked stocks.`,
+      `One pick every ${r.every_days} calendar days: the best score that passes the checks, has no negative institutional note, and was not picked in the last ${r.window_days} days.`,
+      `Buy at the next session's open. Sell at +${tp}%. Exit on the first close ${sp}% or more below the buy price, or ${r.window_days} days after buying if neither happens.`,
+      "The screener counts a target as reached when the day's high touches it, a stop on the closing price, and time-up at the last close inside the window. Charges are not deducted (roughly 0.25% for a delivery round trip).",
+      "The rule is new and has only the replay above as evidence. Judge it by the comparison line, and by the live picks as they close.",
+    ];
+    return h("details", { class: "card" }, h("summary", { text: "The pick rule" }), h("ol", { class: "rules" }, items.map((x) => h("li", { text: x }))));
+  }
+  function updatePickCount() {
+    const p = DATA.picks && DATA.picks.list.find((x) => x.src === "live");
+    $("#picks-count").textContent = p && p.st === "new" ? "new" : "";
+  }
+  function renderPicks(keepScroll) {
+    const V = $("#picks-view"), P = DATA.picks, y = window.scrollY;
+    if (!P) {
+      V.replaceChildren(h("section", { class: "card" }, h("h3", { text: "Picks start with the next nightly update" }),
+        h("p", { class: "note", style: "margin-top:0", text: "Tonight's run downloads the Nifty 100 history, makes the first pick and fills this tab." })));
+      return;
+    }
+    if (!pstate.group) pstate.group = P.stats.live.closed || !P.stats.bt.n ? "live" : "bt";
+    V.replaceChildren(...[latestPickCard(P), nextPickLine(P), rankCard(P), performanceCard(P), screenerCard(P), pickRulesCard(P),
+      h("p", { class: "foot", text: "Picks come from a fixed rule run on NSE's closing data. They are not personal advice and say nothing about your own position size. For information only, not investment advice." })].filter(Boolean));
+    if (keepScroll) window.scrollTo(0, y);
   }
 
   // ---------------------------------------------------------------- live cues
@@ -1332,19 +1556,25 @@ td.hi { color: var(--deliv); font-weight: 600; }
   function route() {
     if (!DATA) return;
     updateTabCount();
+    updatePickCount();
     const m = location.hash.match(/^#s=(.+)$/);
     if (m) { $("#apphead").hidden = true; showDetail(decodeURIComponent(m[1])); return; }
     $("#apphead").hidden = false;
     $("#detail").hidden = true;
-    const onMtf = location.hash === "#mtf";
-    $("#tab-stocks").setAttribute("aria-selected", String(!onMtf));
+    const onMtf = location.hash === "#mtf", onPicks = location.hash === "#picks";
+    $("#tab-stocks").setAttribute("aria-selected", String(!onMtf && !onPicks));
     $("#tab-mtf").setAttribute("aria-selected", String(onMtf));
-    $("#list-view").hidden = onMtf;
+    $("#tab-picks").setAttribute("aria-selected", String(onPicks));
+    $("#list-view").hidden = onMtf || onPicks;
     $("#mtf-view").hidden = !onMtf;
+    $("#picks-view").hidden = !onPicks;
     if (onMtf) {
       renderMTF();
       const target = prefill && document.getElementById("add-trade");
       if (target) target.scrollIntoView(); else window.scrollTo(0, mtfScroll);
+    } else if (onPicks) {
+      renderPicks();
+      window.scrollTo(0, picksScroll);
     } else {
       renderChips();
       renderRows();
@@ -1370,8 +1600,14 @@ td.hi { color: var(--deliv); font-weight: 600; }
       checkKill();
       renderHeader();
       renderControls();
-      $("#tab-stocks").addEventListener("click", () => { if (location.hash === "#mtf") mtfScroll = window.scrollY; location.hash = ""; });
-      $("#tab-mtf").addEventListener("click", () => { if (location.hash !== "#mtf") listScroll = window.scrollY; location.hash = "mtf"; });
+      const leave = () => {
+        if (location.hash === "#mtf") mtfScroll = window.scrollY;
+        else if (location.hash === "#picks") picksScroll = window.scrollY;
+        else if (!location.hash.startsWith("#s=")) listScroll = window.scrollY;
+      };
+      $("#tab-stocks").addEventListener("click", () => { leave(); location.hash = ""; });
+      $("#tab-mtf").addEventListener("click", () => { if (location.hash !== "#mtf") leave(); location.hash = "mtf"; });
+      $("#tab-picks").addEventListener("click", () => { if (location.hash !== "#picks") leave(); location.hash = "picks"; });
       route();
     })
     .catch(() => {

@@ -41,6 +41,35 @@ SYMBOLS = {  # symbol: (company, industry, starting price)
     "TITAN": ("Titan Company Ltd.", "Consumer Durables", 3400), "TRENT": ("Trent Ltd.", "Consumer Services", 4900),
     "ULTRACEMCO": ("UltraTech Cement Ltd.", "Construction Materials", 11800), "WIPRO": ("Wipro Ltd.", "Information Technology", 240),
 }
+NEXT50 = {  # Nifty Next 50 names, to exercise the Nifty 100 list and the three-month pick
+    "ABB": ("ABB India Ltd.", "Capital Goods", 5600), "ADANIENSOL": ("Adani Energy Solutions Ltd.", "Power", 900),
+    "ADANIGREEN": ("Adani Green Energy Ltd.", "Power", 1000), "ADANIPOWER": ("Adani Power Ltd.", "Power", 150),
+    "AMBUJACEM": ("Ambuja Cements Ltd.", "Construction Materials", 560), "BAJAJHLDNG": ("Bajaj Holdings & Investment Ltd.", "Financial Services", 12000),
+    "BAJAJHFL": ("Bajaj Housing Finance Ltd.", "Financial Services", 110), "BANKBARODA": ("Bank of Baroda", "Financial Services", 260),
+    "BPCL": ("Bharat Petroleum Corporation Ltd.", "Oil Gas & Consumable Fuels", 340), "BOSCHLTD": ("Bosch Ltd.", "Automobile and Auto Components", 36000),
+    "BRITANNIA": ("Britannia Industries Ltd.", "Fast Moving Consumer Goods", 5800), "CGPOWER": ("CG Power and Industrial Solutions Ltd.", "Capital Goods", 720),
+    "CANBK": ("Canara Bank", "Financial Services", 125), "CHOLAFIN": ("Cholamandalam Investment and Finance Company Ltd.", "Financial Services", 1600),
+    "DLF": ("DLF Ltd.", "Realty", 760), "DABUR": ("Dabur India Ltd.", "Fast Moving Consumer Goods", 500),
+    "DIVISLAB": ("Divi's Laboratories Ltd.", "Healthcare", 6200), "GAIL": ("GAIL (India) Ltd.", "Oil Gas & Consumable Fuels", 180),
+    "GODREJCP": ("Godrej Consumer Products Ltd.", "Fast Moving Consumer Goods", 1150), "HAVELLS": ("Havells India Ltd.", "Consumer Durables", 1500),
+    "HAL": ("Hindustan Aeronautics Ltd.", "Capital Goods", 4700), "HYUNDAI": ("Hyundai Motor India Ltd.", "Automobile and Auto Components", 2400),
+    "ICICIGI": ("ICICI Lombard General Insurance Company Ltd.", "Financial Services", 1950), "IOC": ("Indian Oil Corporation Ltd.", "Oil Gas & Consumable Fuels", 150),
+    "IRFC": ("Indian Railway Finance Corporation Ltd.", "Financial Services", 125), "NAUKRI": ("Info Edge (India) Ltd.", "Consumer Services", 1350),
+    "JINDALSTEL": ("Jindal Steel Ltd.", "Metals & Mining", 1000), "JSWENERGY": ("JSW Energy Ltd.", "Power", 520),
+    "LICI": ("Life Insurance Corporation of India", "Financial Services", 900), "LODHA": ("Lodha Developers Ltd.", "Realty", 1150),
+    "LTIM": ("LTIMindtree Ltd.", "Information Technology", 5600), "PIDILITIND": ("Pidilite Industries Ltd.", "Chemicals", 1500),
+    "PFC": ("Power Finance Corporation Ltd.", "Financial Services", 400), "PNB": ("Punjab National Bank", "Financial Services", 115),
+    "RECLTD": ("REC Ltd.", "Financial Services", 370), "MOTHERSON": ("Samvardhana Motherson International Ltd.", "Automobile and Auto Components", 105),
+    "SHREECEM": ("Shree Cement Ltd.", "Construction Materials", 28000), "SIEMENS": ("Siemens Ltd.", "Capital Goods", 3100),
+    "SOLARINDS": ("Solar Industries India Ltd.", "Chemicals", 14000), "TVSMOTOR": ("TVS Motor Company Ltd.", "Automobile and Auto Components", 3500),
+    "TATAPOWER": ("Tata Power Company Ltd.", "Power", 390), "TORNTPHARM": ("Torrent Pharmaceuticals Ltd.", "Healthcare", 3600),
+    "UNITDSPR": ("United Spirits Ltd.", "Fast Moving Consumer Goods", 1350), "VBL": ("Varun Beverages Ltd.", "Fast Moving Consumer Goods", 470),
+    "VEDL": ("Vedanta Ltd.", "Metals & Mining", 470), "ZYDUSLIFE": ("Zydus Lifesciences Ltd.", "Healthcare", 980),
+    "CUMMINSIND": ("Cummins India Ltd.", "Capital Goods", 4000), "INDHOTEL": ("The Indian Hotels Company Ltd.", "Consumer Services", 740),
+    "MAZDOCK": ("Mazagon Dock Shipbuilders Ltd.", "Capital Goods", 2800), "ENRIN": ("Siemens Energy India Ltd.", "Capital Goods", 3300),
+}
+NIFTY50 = list(SYMBOLS)
+SYMBOLS.update(NEXT50)
 HOLIDAYS = {date(2026, 1, 26), date(2026, 10, 2), date(2026, 10, 20)}
 # NSE answers some holiday addresses with the previous session's file instead of "not found";
 # these holidays reproduce that, so the pipeline must notice the date inside the file.
@@ -63,6 +92,11 @@ def main(out, last):
     days = [d for d in days if d.weekday() < 5 and d not in HOLIDAYS]
 
     with open(out / "ind_nifty50list.csv", "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["Company Name", "Industry", "Symbol", "Series", "ISIN Code"])
+        for s in NIFTY50:
+            w.writerow([SYMBOLS[s][0], SYMBOLS[s][1], s, "EQ", "INE000000000"])
+    with open(out / "ind_nifty100list.csv", "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["Company Name", "Industry", "Symbol", "Series", "ISIN Code"])
         for s, (n, ind, _) in SYMBOLS.items():

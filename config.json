@@ -1,5 +1,6 @@
 {
   "extra_symbols": [],
+  "pick": {"every_days": 10, "target_pct": 5, "window_days": 91, "stop_pct": 8},
   "notes": {
     "HDFCBANK": {"bias": 1, "as_of": "2026-09-30", "text": "Mutual fund stake rose to 31.9% from 26.0% a year earlier while FPIs cut theirs to 39.4% from 48.4%."},
     "ICICIBANK": {"bias": 1, "as_of": "2026-09-30", "text": "Among mutual funds' five most-bought stocks in September 2026."},

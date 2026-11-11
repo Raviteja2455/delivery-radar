@@ -1,9 +1,10 @@
 # Delivery Radar
 
-A phone-friendly page that shows, for every Nifty 50 stock, the day's delivery percentage, its 5, 10 and 20-day
+A phone-friendly page that shows, for every Nifty 100 stock, the day's delivery percentage, its 5, 10 and 20-day
 averages, delivered and traded quantity, volume against its 20-day average, average trade size, futures open-interest
 buildup, bulk and block deals, and a six-signal accumulation score. A market band at the top sets the size of swing
-trades (green: half size; amber and red: full size; always in cash).
+trades (green: half size; amber and red: full size; always in cash). A Picks tab names one three-month swing pick
+every ten days and tracks how every pick did.
 
 It refreshes itself every weekday night from NSE's public end-of-day files, using GitHub's free scheduled jobs.
 
@@ -14,8 +15,9 @@ It refreshes itself every weekday night from NSE's public end-of-day files, usin
 2. **Add these files** to it, keeping the folders as they are (`radar.py`, `config.json`, `requirements.txt`,
    `docs/`, `.github/workflows/nightly.yml`, `tests/`).
 3. **Turn on the page.** In the repository, open Settings → Pages and set *Source* to **GitHub Actions**.
-4. **Run it once.** Open the Actions tab → *Nightly NSE update* → **Run workflow**. The first run fetches about five
-   months of history and takes roughly five minutes.
+4. **Run it once.** Open the Actions tab → *Nightly NSE update* → **Run workflow**. The first run fetches about nine
+   months of history and takes roughly ten minutes. If NSE stops answering part-way, the run keeps what arrived and
+   the next one carries on.
 5. **Open the app** at `https://<your-github-username>.github.io/delivery-radar/` and add it to your home screen.
 
 After that it runs by itself at about 9:40 PM IST, Monday to Friday, with a catch-up run at about 11:10 PM for evenings
@@ -151,7 +153,39 @@ The backtest's regime leaves out the FII cash leg (no history), and July to Sept
 indicators. Results shift by several points with which trades fill the four slots, so read the direction, not the
 decimals. Past results don't promise future ones; this is not investment advice.
 
-## Adding stocks outside the Nifty 50
+## The Picks tab (November 2026)
+
+Every night the job ranks all Nifty 100 stocks. Every ten days it names one pick, aiming for at least +5% within three
+months, and it keeps score on every pick.
+
+| Step | Rule |
+|---|---|
+| Trend checks | Close above a rising 50-day average; not more than 8% above the 20-day average, and not up more than 8% in 5 sessions |
+| Score (0–100) | Percentile among the ranked stocks on: 3-month return (30), 1-month return (15), delivery % of the last 10 sessions against the 50 before (25), up days minus down days on above-average delivery over 20 sessions (15), closeness to the 3-month high (15) |
+| Pick | The best score that passes the checks, has no negative institutional note, and was not picked in the last 91 days. If nothing passes, the rule looks again the next night |
+| Trade | Buy at the next session's open; sell at +5%; exit on the first close 8% or more below the buy price, or 91 days after buying |
+
+The four numbers (10 days, +5%, 91 days, −8%) are the `pick` block in `config.json`. A live pick keeps the numbers it
+was made with. Live picks are saved in `data/picks.json`, so they stay on record after the day files they were scored
+from are deleted, and a picked stock keeps being downloaded even if it leaves the index.
+
+**The screener** lists every pick with its buy price, last or exit price, result, best and worst point, days held,
+result against the Nifty 50 and status (open, target hit, stopped out, time up). It has two sets:
+
+- **Live picks**: what the nightly run actually published.
+- **Back-test**: the same rule replayed on the stored history (about nine months, growing to fourteen), on the same
+  ten-day grid counted back from the first live pick. It uses today's Nifty 100 list throughout, and nobody traded it.
+
+Each set shows a comparison line: every ranked stock bought on the same dates with the same exits. A large-cap stock
+touches +5% at some point in three months more often than not, so the rule is only worth following if it beats that
+line. With a +5% target and a −8% stop, about 62% of closed picks must reach the target just to break even. Charges are
+not deducted (about 0.25% for a delivery round trip). The rule itself has no long back-test behind it yet; the replay
+and the live record are its evidence.
+
+The Swing tab still runs only on the Nifty 50, the stocks plan v2 was tested on. Each stock's page shows its pick
+score and rank, and the Stocks tab can be sorted by it.
+
+## Adding stocks outside the Nifty 100
 
 Edit `config.json` on GitHub and list NSE symbols, for example:
 
@@ -161,8 +195,8 @@ Edit `config.json` on GitHub and list NSE symbols, for example:
 }
 ```
 
-The next run picks them up and back-fills their history. Nifty 50 changes (new entrants, exits) are picked up
-automatically from NSE's own list.
+The next run picks them up and back-fills their history. Nifty 50 and Nifty 100 changes (new entrants, exits) are
+picked up automatically from NSE's own lists. Added stocks are not ranked for picks.
 
 ## What each number means
 
