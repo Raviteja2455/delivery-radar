@@ -99,6 +99,16 @@ TV_COLS = (
     "SMA50", "SMA200", "price_52_week_high", "price_52_week_low", "Perf.3M", "Perf.6M", "Perf.Y",
     "average_volume_30d_calc", "float_shares_percent_current",
     "earnings_release_date", "earnings_release_next_date", "fiscal_period_end_current",
+    # PROBE (temporary): which forensic and lender readings does the screener have?
+    "beneish_m_score_fy", "beneish_m_score_ttm", "sloan_ratio_fy", "sloan_ratio_ttm", "graham_numbers_fy", "graham_numbers_ttm",
+    "nonperf_loans_loans_gross_fy", "nonperf_loans_loans_gross_fq", "loan_loss_coverage_fy", "loan_loss_rsrv_total_loans_fy",
+    "loans_net_total_deposits_fy", "efficiency_ratio_fy", "demand_deposits_total_deposits_fy", "net_interest_margin_fy",
+    "tier1_capital_ratio_fy", "total_capital_ratio_fy", "quality_ratio_fy", "fulmer_h_factor_fy", "zmijewski_score_fy",
+    "earnings_per_share_diluted_fy", "earnings_per_share_forecast_next_fq", "revenue_forecast_next_fy", "price_earnings_forward_fy",
+    "return_on_equity_5y_avg", "net_margin_5y_avg", "operating_margin_5y_avg", "net_margin_fy", "operating_margin_fy",
+    "return_on_equity_adjust_to_book_fy", "price_earnings_growth_ttm", "enterprise_value_ebitda_ttm", "price_free_cash_flow_ttm",
+    "total_shares_outstanding", "earnings_per_share_diluted_fq", "number_of_shareholders", "gross_margin_ttm",
+    "long_term_debt_to_equity_fy", "current_ratio_fy", "cash_n_short_term_invest_fy", "total_debt_fy", "ebitda_ttm",
 )
 TV_CHUNK = 250
 
@@ -194,7 +204,7 @@ RESEARCH_DEFAULTS = {
     "hurdle_large": 15.0, "hurdle_mid": 20.0, "hurdle_small": 25.0,   # discount to fair value needed to buy
     "stop_large": 15.0, "stop_mid": 18.0, "stop_small": 22.0,         # closing-basis stop under the buy price
     "coe_large": 12.0, "coe_mid": 13.0, "coe_small": 14.5,            # return demanded: bond yield + equity + size premium
-    "terminal_growth": 5.0, "growth_cap": 18.0,
+    "terminal_growth": 5.0, "growth_cap": 15.0, "growth_cap_lender": 12.0, "target_cap": 60.0,
     "medium_days": 365, "long_days": 730,
 }
 
@@ -1316,6 +1326,7 @@ RESEARCH_MIN = {                 # entry checks
 RESEARCH_HOLD = {"roe": 10.0, "de": 1.5, "pio": 3}   # a holding that breaks any of these is sold
 LONG_TERM = {"roe": 18.0, "growth": 12.0, "de": 0.5, "pio": 6}  # compounders get the 1-2 year horizon
 PE_CAP, LENS_CAP = 35.0, 2.0     # no method may use a P/E above 35 or put fair value above twice the price
+LONG_GROWTH = 12.0               # a 1-2 year target is fair value one year on, grown at this rate at most
 RESEARCH_PARTS = (               # reading, weight in the 0-100 score, label
     ("up", 35, "Discount to fair value"),
     ("roe", 12, "Return on equity"),
@@ -1430,7 +1441,7 @@ def research_assess(sym, f, c, cap, fin, peers_pe, R):
         return None
     key = {"L": "large", "M": "mid", "S": "small"}[cap]
     r, hurdle = R["coe_" + key], R["hurdle_" + key]
-    g = research_growth(f, R["growth_cap"], fin)
+    g = research_growth(f, R["growth_cap_lender"] if fin else R["growth_cap"], fin)
     eps = normal_eps(f, g)
     roe = f["roe"] * eps / f["eps"]  # return on equity on the same normalised earnings
     if eps <= 0 or roe <= R["terminal_growth"]:
@@ -1445,15 +1456,17 @@ def research_assess(sym, f, c, cap, fin, peers_pe, R):
     if f["tgt"] and (f["tgt_n"] or 0) >= RESEARCH_MIN["analysts"]:
         lens["street"] = f["tgt"] / (1 + r / 100)  # a 12-month target, brought back to today
     have = sorted(min(v, top) for v in lens.values() if v is not None and v > 0)
-    fv = None
-    if len(have) >= RESEARCH_MIN["lenses"]:
-        m = len(have) // 2
-        fv = have[m] if len(have) % 2 else (have[m - 1] + have[m]) / 2
+    # Fair value is the second-lowest method: all but one of them must say the stock is worth at least
+    # this much. Two of the methods lean on the same growth figure, so the middle would trust it twice.
+    fv = have[1] if len(have) >= RESEARCH_MIN["lenses"] else None
     long_term = (fv is not None and g is not None and roe >= LONG_TERM["roe"] and g >= LONG_TERM["growth"]
                  and (fin or (f["de"] is not None and f["de"] <= LONG_TERM["de"]))
                  and (f["pio"] is None or f["pio"] >= LONG_TERM["pio"]))
-    # Long-term picks aim at fair value 18 months on, grown at the assumed rate (15% a year at most).
-    target = fv * (1 + min(g, 15.0) / 100) ** 1.5 if long_term else fv
+    # A 1-2 year pick aims at fair value one year on; a 6-12 month pick at today's. Neither target may
+    # sit more than `target_cap` above the price: a wider gap usually means the numbers miss something.
+    target = None
+    if fv:
+        target = min(fv * (1 + min(g, LONG_GROWTH) / 100) if long_term else fv, c * (1 + R["target_cap"] / 100))
     return {
         "g": g, "r": r, "hurdle": hurdle, "lens": lens, "n_lens": len(have), "fv": fv, "eps": eps, "roe": roe,
         "up": pct(fv, c) if fv else None, "buy_below": fv / (1 + hurdle / 100) if fv else None,
@@ -1472,7 +1485,8 @@ def research_checks(f, a, cap, fin, turnover, c, sma200, slot):
                                    and (f["icov"] is None or f["icov"] >= m["icov"]))],
         ["growth", growth is not None and growth >= m["growth"] and (f["rev_g"] is None or f["rev_g"] >= 0)
                    and (f["eps_g"] is None or f["eps_g"] >= 0)],
-        ["strength", True if fin else (f["pio"] is not None and f["pio"] >= m["pio"])],
+        # The screen can't read a lender's bad loans, so it wants enough analysts watching instead.
+        ["strength", (f["tgt_n"] or 0) >= m["analysts"] if fin else (f["pio"] is not None and f["pio"] >= m["pio"])],
         ["cash", (f["roa"] is not None and f["roa"] >= 1.0) if fin else
                  ((f["fcf"] is not None and f["fcf"] > 0) or (f["fcf"] is None and f["cfo"] is not None and f["cfo"] > 0))],
         ["liquid", turnover is not None and turnover >= m["turnover_cr"] and c <= slot],
@@ -1771,7 +1785,7 @@ def build(make_picks=False):
         "picks": picks,
         "research": research,
         "universe": "Nifty 100" if len(n100) >= 90 else "Nifty 50",
-        "deals": [x for x in deals if x["d"] >= det_days[0]][-80:],
+        "deals": [x for x in deals if x["d"] >= det_days[0] and x["s"] in set(universe)][-80:],
         "have": {"fo": asof in fo, "idx": asof in idx, "flows": asof in flows, "part": "FII" in part.get(asof, {})},
         "mtf": {"stop_buffer_pct": STOP_BUFFER * 100, "min_stop_pct": MIN_STOP_PCT},
         "extra": [s for s in cfg["extra_symbols"] if s not in n50 | n100],

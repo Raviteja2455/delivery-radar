@@ -165,7 +165,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
 
 /* tabs */
 .tabs { display: flex; gap: 4px; background: var(--sheet); border-radius: 12px; padding: 4px; margin: 14px 0 0; }
-.tab { flex: 1 1 0; border: 0; background: none; border-radius: 9px; padding: 8px 10px; font: 600 16px/1.2 var(--font-c); color: var(--ink-2); cursor: pointer; }
+.tab { flex: 1 1 auto; border: 0; background: none; border-radius: 9px; padding: 8px 6px; font: 600 16px/1.2 var(--font-c); color: var(--ink-2); cursor: pointer; white-space: nowrap; }
 .tab[aria-selected="true"] { background: var(--ink); color: var(--paper); }
 .tab .n { font-weight: 500; margin-left: 5px; color: var(--signal); }
 .tab[aria-selected="true"] .n { color: inherit; opacity: .8; }
@@ -222,6 +222,24 @@ td.hi { color: var(--deliv); font-weight: 600; }
 .card .chips { padding-bottom: 10px; }
 .card .figs { margin: 2px 0 4px; }
 
+/* research */
+.rs-row { border-top: 1px solid var(--rule); }
+.rs-row:first-of-type { border-top: 0; }
+.rs-row > summary { list-style: none; cursor: pointer; padding: 11px 0 10px; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline; }
+.rs-row > summary::-webkit-details-marker { display: none; }
+.rs-row > summary .sym { font: 600 18px/1.15 var(--font-c); }
+.rs-row > summary .up { font: 600 17px/1.15 var(--font-c); text-align: right; }
+.rs-row > summary .meta { grid-column: 1 / -1; font-size: 13px; color: var(--ink-2); }
+.rs-row > summary .meta b { color: var(--ink); font-weight: 500; }
+.rs-row[open] > summary { padding-bottom: 4px; }
+.rs-body { padding: 4px 0 14px; }
+.rs-body h4 { font: 600 14px/1.2 var(--font-c); margin: 12px 0 6px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+.tag.cap { color: var(--deliv); margin-left: 6px; font-weight: 500; }
+.funnel { display: grid; grid-template-columns: auto 1fr auto; gap: 7px 10px; align-items: center; font-size: 13.5px; }
+.funnel .b { height: 10px; border-radius: 3px; background: var(--deliv-soft); min-width: 3px; }
+.funnel .b.last { background: var(--signal); }
+.funnel .n { font: 600 15px var(--font-c); text-align: right; font-variant-numeric: tabular-nums; }
+
 /* live cues */
 .live { background: var(--sheet); border-radius: 12px; padding: 9px 14px 12px; margin: 12px 0 0; }
 .live-top { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); min-height: 28px; }
@@ -253,7 +271,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
   .figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: no-preference) {
-  #detail:not([hidden]), #mtf-view:not([hidden]), #picks-view:not([hidden]) { animation: rise .18s ease-out; }
+  #detail:not([hidden]), #mtf-view:not([hidden]), #picks-view:not([hidden]), #research-view:not([hidden]) { animation: rise .18s ease-out; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   .lf .v.tick-up { animation: tickup 1.6s ease-out; }
   .lf .v.tick-dn { animation: tickdn 1.6s ease-out; }
@@ -273,6 +291,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
       <button class="tab" id="tab-stocks" type="button" aria-selected="true">Stocks</button>
       <button class="tab" id="tab-mtf" type="button" aria-selected="false">Swing<span class="n" id="mtf-count"></span></button>
       <button class="tab" id="tab-picks" type="button" aria-selected="false">Picks<span class="n" id="picks-count"></span></button>
+      <button class="tab" id="tab-research" type="button" aria-selected="false">Research<span class="n" id="research-count"></span></button>
     </nav>
     <section class="live" id="live" aria-label="Live market cues">
       <div class="live-top"><span class="beat" aria-hidden="true"></span><span class="when">Fetching live quotes…</span></div>
@@ -290,6 +309,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         <p>The live strip shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR, with MCX gold (₹ per 10 g) and silver (₹ per kg) below, refreshed every 20 seconds while the app is open. A green dot means that market is trading now. GIFT Nifty, USD/INR and MCX are real time; crude runs 10 minutes behind. Each uses its most-traded contract, named after the label. When MCX trading moves to the next month ahead of expiry, the label changes month and the price shifts by the gap between the two contracts. Outside NSE hours the line under the strip compares GIFT Nifty with the close of the Nifty futures for the same month, which is the usual read on how the next session will open.</p>
         <p>The band at the top sets the size of swing trades. All of them are in cash, with no MTF. Green (an uptrend) means half size, because breakouts taken in green markets did worst in the 2020–26 backtests; amber and red mean full size. The Swing tab runs the full entry, sizing and exit rules on every stock and explains the evidence under <i>The rules this tab applies</i>.</p>
         <p>The Picks tab ranks every Nifty 100 stock each night and names one three-month swing pick every ten days, aiming for at least +5%. It then tracks every pick, and a replay of the same rule on past data, so you can see how often the target was reached. The Swing tab stays on the Nifty 50, the stocks its plan was tested on.</p>
+        <p>The Research tab screens the Nifty 500 (large, mid and small caps) for investments of six months to two years. It keeps only profitable, well-financed, growing companies, works out a fair value four ways, and names a stock only when the price is well below it. It sizes a ₹1 lakh portfolio in five equal slots and follows every pick to its exit.</p>
         <p>FII activity, inside the band, shows each session's net cash buying or selling by foreign investors (NSE's provisional figure) and how their index futures, calls and puts changed, from NSE's participant-wise open interest. A positive futures or calls number, or a negative puts number, is the bullish side. The verdict under the table weighs the latest day's cash, futures and options: when they all agree it says bullish or bearish, otherwise it leans with the majority. On Nifty's weekly expiry (marked *), option changes include contracts that simply expired. The tile beside VIX shows how much of FIIs' index-futures position is long.</p>
       </div>
     </details>
@@ -312,6 +332,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
   </main>
   <main id="mtf-view" hidden></main>
   <main id="picks-view" hidden></main>
+  <main id="research-view" hidden></main>
   <main id="detail" hidden></main>
 </div>
 
@@ -571,6 +592,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
     $("#list-view").hidden = true;
     $("#mtf-view").hidden = true;
     $("#picks-view").hidden = true;
+    $("#research-view").hidden = true;
     D.hidden = false;
     window.scrollTo(0, 0);
     drawChart(st);
@@ -1255,6 +1277,229 @@ td.hi { color: var(--deliv); font-weight: 600; }
     if (keepScroll) window.scrollTo(0, y);
   }
 
+  // ---------------------------------------------------------------- research: 6-month to 2-year investments
+  // The nightly job screens the Nifty 500 on fundamentals, values each stock four ways and keeps a
+  // five-slot portfolio's log. Everything shown here comes from the data file; nothing is stored on the phone.
+  const rstate = { status: "all" };
+  let researchScroll = 0;
+  const CAP = { L: "Large cap", M: "Mid cap", S: "Small cap" };
+  const HORIZON = { M: "6–12 months", L: "1–2 years" };
+  const RS_STATUS = { new: ["Buy at next open", "mtf"], open: ["Holding", ""], target: ["Target hit", "lb"],
+    stopped: ["Stopped out", "sb"], broken: ["Checks failed, sold", "sb"], timeup: ["Time up", ""] };
+  const rsTag = (st) => h("span", { class: "tag " + RS_STATUS[st][1], text: RS_STATUS[st][0] });
+  const rsCell = (k, v, sub) => h("div", {}, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub ? h("div", { class: "s", text: sub }) : null);
+
+  // One stock's valuation and checklist, as worked out on the night in `x`.
+  function researchWhy(x) {
+    const R = DATA.research, m = R.min, rules = R.rules;
+    const methods = [
+      ["dcf", "Cash-flow value", `growth ${fmt(x.g, 1)}% fading to ${plain(rules.terminal_growth)}%, return demanded ${plain(x.r)}%`],
+      ["lynch", "Lynch fair P/E", `P/E of growth plus dividend yield, ${fmt(Math.max(8, Math.min((x.g || 0) + (x.dy || 0), R.pe_cap)), 1)}`],
+      ["sector", "Peer P/E", `the median P/E of its closest peers, ${plain(R.pe_cap)} at most`],
+      ["street", "Analysts", x.street_n >= m.analysts ? `median target ${rupees(x.street)} of ${x.street_n} analysts, brought back one year` : `fewer than ${m.analysts} analysts, so not used`],
+    ];
+    const capped = x.eps_n != null && x.eps != null && x.eps_n < x.eps * 0.98;
+    const label = {
+      roe: `Return on equity ${plain(x.fin ? m.roe_fin : m.roe)}% or more`,
+      debt: x.fin ? "Debt check (not applied to lenders and insurers)" : `Debt no more than ${plain(x.cap === "S" ? m.de_small : m.de)}× equity, interest covered ${plain(m.icov)}×`,
+      growth: `Sales growing ${plain(m.growth)}% a year, and not shrinking now`,
+      strength: x.fin ? "Piotroski score (not applied to lenders and insurers)" : `Piotroski strength score ${m.pio} of 9 or more`,
+      cash: x.fin ? "Return on assets 1% or more" : "Profit turns into free cash",
+      liquid: `Trades ₹${plain(m.turnover_cr)} cr a day; one share fits a slot`,
+      value: `Price ${plain(x.hurdle)}% or more below fair value`,
+      trend: "Close above the 200-day average",
+      street: "Analysts' target not below the price",
+    };
+    const val = {
+      roe: `${fmt(x.roe_n, 1)}%` + (capped ? ` on capped earnings (reported ${fmt(x.roe, 1)}%)` : ""),
+      debt: x.fin ? "Borrowing is a lender's raw material" : `${x.de != null ? fmt(x.de, 2) + "×" : "no figure"}${x.icov != null ? `, interest covered ${fmt(x.icov, 1)}×` : ""}`,
+      growth: `5 years: sales ${signed(x.rev_c5, 1)} a year${x.eps_c5 != null ? `, earnings ${signed(x.eps_c5, 1)}` : ""}. Last 12 months: sales ${signed(x.rev_g, 1)}, earnings ${signed(x.eps_g, 1)}`,
+      strength: x.fin ? "–" : x.pio != null ? `${x.pio} of 9` : "no score published",
+      cash: x.fin ? `${fmt(x.roa, 2)}%` : x.cash != null ? `Free cash flow is ${fmt(x.cash, 2)}× net profit` : "positive operating cash flow",
+      liquid: `Median turnover ₹${fmt(x.turn, 1)} cr a day; price ${rupees(x.c)} vs slot ${rupees(R.slot, 0)}`,
+      value: `${rupees(x.c)} vs ${rupees(x.fv)}: ${signed(x.up, 1)} to fair value. Buy below ${rupees(x.bb)}`,
+      trend: `${rupees(x.c)} vs ${rupees(x.sma200)}`,
+      street: x.street_n >= m.analysts ? `${rupees(x.street)} (${x.street_n} analysts)` : "Too few analysts; not applied",
+    };
+    const checks = [...x.q, ...x.rest].map(([k, ok]) => ({ label: label[k], ok: !!ok, val: val[k] }));
+    return [
+      h("h4", { text: "Fair value" }),
+      h("div", { class: "tbl" }, h("table", {},
+        h("thead", {}, h("tr", {}, ["Method", "Value", "vs price"].map((t) => h("th", { scope: "col", text: t })))),
+        h("tbody", {}, methods.map(([k, name, how]) => h("tr", {},
+          h("td", { style: "white-space:normal;font:400 13.5px var(--font)" }, h("b", { style: "font-weight:500", text: name }), h("br"), h("span", { style: "color:var(--ink-2);font-size:12.5px", text: how })),
+          h("td", { text: x.lens[k] != null ? rupees(x.lens[k], 0) : "–" }),
+          h("td", { class: x.lens[k] != null ? dir(x.lens[k] / x.c - 1) : null, text: x.lens[k] != null ? signed((x.lens[k] / x.c - 1) * 100, 0) : "–" }))),
+          h("tr", {}, h("td", { style: "font:600 14px var(--font)", text: "Fair value (the middle)" }), h("td", { class: "hi", text: rupees(x.fv, 0) }),
+            h("td", { class: dir(x.up), text: signed(x.up, 0) }))))),
+      h("p", { class: "note", text: `Earnings used: ${rupees(x.eps_n)} a share` + (capped ? `, capped from ${rupees(x.eps)}: never more than last year's grown at the long-run rate, or than analysts expect next year.` : ".") +
+        ` P/E ${fmt(x.pe, 1)}${x.pb != null ? `, price to book ${fmt(x.pb, 1)}` : ""}${x.dy ? `, dividend yield ${fmt(x.dy, 1)}%` : ""}${x.mcap ? `, market value ₹${fmt(x.mcap, 0)} cr` : ""}. No single method may put fair value above twice the price.` }),
+      h("h4", { text: "Checklist" }),
+      h("ul", { class: "checks" }, checks.map(checkItem)),
+      x.fin ? h("p", { class: "note", text: "This is a lender or insurer. The screen can't see bad loans, provisions or capital adequacy; read the latest results before buying." }) : null,
+      x.sc != null ? h("p", { class: "note", text: `Score ${fmt(x.sc, 0)} of 100 against the other stocks that pass the quality checks: ` +
+        R.parts.map(([, w, name], i) => `${name.toLowerCase()} beats ${x.p[i]}% (weight ${w})`).join("; ") + "." }) : null,
+    ].filter(Boolean);
+  }
+  const rsTags = (x) => [h("span", { class: "tag cap", text: CAP[x.cap] }), h("span", { class: "tag", style: "margin-left:4px", text: HORIZON[x.hz] })];
+  function researchPickCard(p) {
+    const R = DATA.research, isNew = p.st === "new", w = p.why || {};
+    const base = isNew ? p.c0 : p.e * (p.f || 1);
+    const qty = Math.floor(R.slot / base);
+    const done = !!p.done;
+    const grid = [
+      isNew ? rsCell("Buy", "Next session's open", `${qty} shares, about ${rupees(qty * base, 0)}`)
+            : rsCell("Bought", rupees(base), `${qty} shares on ${shortDate(p.ed)}`),
+      rsCell("Fair value", rupees(p.fv_now ?? p.fv, 0), p.fv_now != null && Math.abs(p.fv_now / p.fv - 1) > 0.02 ? `${rupees(p.fv, 0)} when picked` : `${signed(p.up, 0)} when picked`),
+      rsCell("Target", (isNew ? "about " : "") + rupees(base * (1 + p.tgt_pct / 100), 0), `+${fmt(p.tgt_pct, 0)}%, ${p.hz === "L" ? "fair value 18 months on" : "fair value"}`),
+      rsCell("Stop", (isNew ? "about " : "") + rupees(base * (1 - p.stop_pct / 100), 0), `${MINUS}${plain(p.stop_pct)}%, on a closing basis`),
+      rsCell(done ? "Sold" : "Review by", done ? longDate(p.xd) : isNew ? HORIZON[p.hz] + " on" : longDate(addDays(p.ed, p.days)), done ? RS_STATUS[p.st][0].toLowerCase() : `sell then if still open`),
+      isNew ? rsCell("Buy only below", rupees(w.bb, 0), "above this the discount is gone")
+            : rsCell(done ? "Result" : "So far", signed(p.ret), `best ${signed(p.peak, 0)}, worst ${signed(p.low, 0)}`),
+    ];
+    const owned = S().holdings.includes(p.s);
+    return h("article", { class: "cand" },
+      h("h3", {}, h("span", { text: p.s }), h("span", { class: "px", text: rupees(p.last) })),
+      h("p", { class: "sub", text: [p.n, p.ind].filter(Boolean).join(", ") }),
+      h("div", { class: "pk-head" }, rsTag(p.st), h("span", { class: "tag cap", style: "margin:0", text: CAP[p.cap] }), h("span", { class: "tag", text: HORIZON[p.hz] }),
+        h("span", { class: "note", style: "margin:0", text: `Picked on the ${shortDate(p.d)} close · score ${fmt(p.sc, 0)}` })),
+      h("div", { class: "plan" }, grid),
+      p.note ? h("p", { class: "note", text: `Sold because ${p.note}.` }) : null,
+      owned ? h("p", { class: "note", text: "You already own this stock (it's in your Swing holdings), so this adds to it." }) : null,
+      w.q ? h("details", { style: "margin-top:10px" }, h("summary", { style: "cursor:pointer;color:var(--deliv);font-weight:500;font-size:14px", text: "Why this stock (as picked)" }),
+        h("div", { class: "rs-body" }, researchWhy(w))) : null);
+  }
+  function researchRow(x, waiting) {
+    const miss = x.rest.filter(([, ok]) => !ok).map(([k]) => ({ value: `price at or below ${rupees(x.bb, 0)}`, trend: `a close above ${rupees(x.sma200, 0)}`, street: "analysts' target above the price" }[k]));
+    return h("details", { class: "rs-row" },
+      h("summary", {}, h("span", {}, h("span", { class: "sym", text: x.s }), rsTags(x)),
+        h("span", { class: "up " + dir(x.up), text: signed(x.up, 0) }),
+        h("span", { class: "meta" }, `${rupees(x.c)} · fair value `, h("b", { text: rupees(x.fv, 0) }),
+          waiting ? ` · needs ${miss.join(" and ")}` : ` · target ${rupees(x.tgt, 0)} · score ${fmt(x.sc, 0)}`)),
+      h("div", { class: "rs-body" },
+        h("p", { class: "dname", style: "margin-bottom:4px", text: [x.n, x.ind].filter(Boolean).join(", ") }),
+        researchWhy(x)));
+  }
+  function researchBand(R) {
+    const open = R.picks.filter((p) => !p.done), closed = R.picks.filter((p) => p.done);
+    const cost = (p) => { const b = p.st === "new" ? p.c0 : p.e * (p.f || 1); return Math.floor(R.slot / b) * b; };
+    const invested = open.reduce((a, p) => a + cost(p), 0);
+    const gain = open.reduce((a, p) => a + cost(p) * (p.ret || 0) / 100, 0);
+    const booked = closed.reduce((a, p) => a + cost(p) * (p.ret || 0) / 100, 0);
+    const pot = R.rules.pot, total = gain + booked;
+    const fd = R.fund_d ? shortDate(R.fund_d) : null;
+    const why = [
+      `${rupeesShort(pot)} in ${R.rules.max_positions} equal slots of ${rupees(R.slot, 0)}. What isn't invested stays in cash.`,
+      fd ? `Fundamentals as of ${fd}, for ${R.funnel.data} of ${R.funnel.universe} ${R.universe} stocks.` : "No fundamentals have arrived yet.",
+      R.note || (R.due > DATA.asof && open.length < R.rules.max_positions ? `Next pick: the first night on or after ${longDate(R.due)} that a stock clears every check.` : null),
+    ].filter(Boolean);
+    return h("section", { class: "regime", "data-r": R.ready ? (open.length ? "green" : "amber") : "red" },
+      h("p", { class: "verdict" }, h("b", { text: `${open.length} of ${R.rules.max_positions}` }), " research slots in use"),
+      h("ul", { class: "why" }, why.map((t) => h("li", { text: t }))),
+      h("div", { class: "figs" },
+        fig("Invested", rupeesShort(invested), null, `${open.length} stock${open.length === 1 ? "" : "s"}`),
+        fig("Cash", rupeesShort(pot - invested + booked), null, "uninvested"),
+        fig("Gain so far", rupees(total, 0), null, `${signed(total / pot * 100, 1)} of ${rupeesShort(pot)}`),
+        fig("Closed", String(closed.length), null, closed.length ? `${R.stats.target} at target` : "none yet")));
+  }
+  function researchFunnel(R) {
+    const f = R.funnel, steps = [
+      [`${R.universe} stocks`, f.universe], ["With checked fundamentals", f.data], ["Profitable, with a fair value", f.valued],
+      ["Pass all six quality checks", f.quality], ["…and above the 200-day average", f.trend], ["…and cheap enough: buy zone", f.buy]];
+    return h("section", { class: "card" }, h("h3", { text: "Tonight's funnel" }),
+      h("div", { class: "funnel" }, steps.flatMap(([label, n], i) => [
+        h("span", { text: label }),
+        h("span", { class: "b" + (i === steps.length - 1 ? " last" : ""), style: `width:${Math.max(1, n / Math.max(1, f.universe) * 100).toFixed(1)}%` }),
+        h("span", { class: "n", text: n })])),
+      h("p", { class: "note", text: "Most nights the buy zone is small or empty. A fund manager waits for price; so does this screen." }));
+  }
+  function researchRecord(R) {
+    const filters = [["all", "All", () => true], ["open", "Open", (p) => !p.done], ["closed", "Closed", (p) => !!p.done]];
+    const rows = R.picks.filter(filters.find(([k]) => k === rstate.status)[2]);
+    const G = R.stats;
+    const card = h("section", { class: "card", id: "research-record" }, h("h3", { text: "Research track record" }));
+    if (!R.picks.length) {
+      card.append(h("p", { class: "note", style: "margin-top:0", text: "No research picks yet. This rule is new and can't be replayed on the past, because no history of fundamentals is stored; its record starts with its first pick." }));
+      return card;
+    }
+    card.append(h("div", { class: "figs" },
+      fig("Picks", String(G.n), null, `${G.closed} closed`),
+      fig("At target", G.hit != null ? `${fmt(G.hit, 0)}%` : "–", null, G.closed ? `${G.target} of ${G.closed}` : "none closed"),
+      fig("Avg result", signed(G.closed ? G.avg : G.open_avg), null, G.closed ? "closed picks" : "open picks"),
+      fig("vs index", signed(G.vs), null, "closed picks")));
+    card.append(h("div", { class: "chips", style: "margin-top:10px", role: "toolbar", "aria-label": "Filter research picks" }, filters.map(([k, label, fn]) =>
+      h("button", { class: "chip", type: "button", "aria-pressed": String(rstate.status === k), onclick: () => { rstate.status = k; renderResearch(true); } },
+        label, h("span", { class: "n", text: R.picks.filter(fn).length })))));
+    if (!rows.length) { card.append(h("p", { class: "empty", text: "No picks match." })); return card; }
+    card.append(h("div", { class: "tbl" }, h("table", { class: "pk-tbl" },
+      h("thead", {}, h("tr", {}, ["Stock", "Bought", "Last / sold", "Result", "Best", "Worst", "Target", "vs index", "Status"].map((t) => h("th", { scope: "col", text: t })))),
+      h("tbody", {}, rows.map((p) => {
+        const base = p.st === "new" ? null : p.e * (p.f || 1);
+        return h("tr", {},
+          h("td", {}, p.s, h("small", { text: `${CAP[p.cap].replace(" cap", "")} · ${HORIZON[p.hz]}` })),
+          h("td", {}, base != null ? price(base) : "–", h("small", { text: p.ed ? shortDate(p.ed) : "next open" })),
+          h("td", {}, price(p.last), h("small", { text: shortDate(p.xd || p.ld) })),
+          h("td", { class: dir(p.ret), text: signed(p.ret) }),
+          h("td", { class: dir(p.peak), text: signed(p.peak, 0) }),
+          h("td", { class: dir(p.low), text: signed(p.low, 0) }),
+          h("td", { text: `+${fmt(p.tgt_pct, 0)}%` }),
+          h("td", { class: dir(p.idx != null && p.ret != null ? p.ret - p.idx : null), text: p.idx != null && p.ret != null ? signed(p.ret - p.idx, 1) : "–" }),
+          h("td", {}, rsTag(p.st)));
+      })))));
+    card.append(h("p", { class: "note", text: "Results are price changes from the buy price, adjusted for splits and bonuses; dividends and charges are not counted. vs index compares with the Nifty 500 (or Nifty 50) over the same days. The target, stop and time limit are checked on closing prices." }));
+    return card;
+  }
+  function researchRules(R) {
+    const r = R.rules, m = R.min, hd = R.hold, lt = R.long;
+    const items = [
+      `Mandate: a separate ${rupeesShort(r.pot)} portfolio for holdings of six months to two years. Cash delivery only, no leverage. At most ${r.max_positions} stocks of ${rupees(R.slot, 0)} each, no more than ${r.max_sector} in one sector and ${r.max_small} small caps. Cash is a position: nothing is bought just to be invested.`,
+      `Universe: the ${R.universe}. Large caps are the Nifty 100, mid caps the Nifty Midcap 150, small caps the Nifty Smallcap 250. A stock must trade ₹${plain(m.turnover_cr)} cr a day and one share must fit a slot.`,
+      `Quality first (all six): return on equity ${plain(m.roe)}% or more (${plain(m.roe_fin)}% for lenders and insurers); debt no more than ${plain(m.de)}× equity (${plain(m.de_small)}× for small caps) with interest covered ${plain(m.icov)}×; sales growing ${plain(m.growth)}% a year over five years and neither sales nor earnings shrinking now; a Piotroski strength score of ${m.pio} of 9 or more; profit that turns into free cash (for lenders, return on assets of 1% or more); and enough turnover.`,
+      "Never value a boom year. Earnings used are the last twelve months', but no more than last year's grown at the long-run rate, and no more than analysts expect next year. Return on equity is cut by the same amount. This is what keeps refiners and metal makers at the top of their cycle out of the buy zone.",
+      `Growth assumed: the lower of five-year sales and earnings growth, pulled down when the last year was slower, ${plain(r.growth_cap)}% at most. A lender's growth can't exceed what its retained profit funds.`,
+      `Fair value, four ways. (1) Cash-flow value: ten years of earnings a shareholder could take out after funding growth, growth fading to ${plain(r.terminal_growth)}% for ever, discounted at ${plain(r.coe_large)}% for large caps, ${plain(r.coe_mid)}% for mid caps and ${plain(r.coe_small)}% for small caps. (2) Peter Lynch's rule: a fair P/E equals growth plus dividend yield. (3) The median P/E of the stock's closest peers, ${plain(R.pe_cap)} at most. (4) Analysts' median 12-month target, brought back one year, when ${m.analysts} or more cover the stock. Fair value is the middle of the methods available; at least ${m.lenses} are needed.`,
+      `Margin of safety: buy only ${plain(r.hurdle_large)}% or more below fair value for a large cap, ${plain(r.hurdle_mid)}% for a mid cap, ${plain(r.hurdle_small)}% for a small cap. Each stock's "buy below" price is that line.`,
+      "Timing: the close must be above the 200-day average, and analysts' target, where there is one, must not be below the price. A cheap stock that is still falling stays on the waiting list.",
+      `Horizon and target. A compounder (return on equity ${plain(lt.roe)}%+, growth ${plain(lt.growth)}%+, debt under ${plain(lt.de)}× equity, Piotroski ${lt.pio}+) is a 1–2 year pick with a target of fair value 18 months on. Every other pick is a 6–12 month pick with a target of today's fair value.`,
+      `One pick at a time: at most one new pick every ${r.every_days} days, the highest score in the buy zone, bought at the next open. The score weighs the discount to fair value (35), quality (30), growth (20) and timing (15).`,
+      `Selling: at the target; at a close ${plain(r.stop_large)}% below the buy price for a large cap, ${plain(r.stop_mid)}% for a mid cap, ${plain(r.stop_small)}% for a small cap; when the business stops passing looser checks (earnings turn negative, return on equity under ${plain(hd.roe)}%, debt over ${plain(hd.de)}× equity, Piotroski ${hd.pio} or less); or after ${Math.round(r.medium_days / 30.4)} months for a 6–12 month pick and ${Math.round(r.long_days / 30.4)} months for a 1–2 year pick.`,
+      "Tax, for your own planning: gains on shares sold within 12 months are taxed at 20%; after 12 months at 12.5% on gains above ₹1.25 lakh a year. Delivery charges are roughly 0.25% for a round trip.",
+      "What the screen can't see: promoter pledges, governance, order books, bad loans, one-off gains and anything announced since the last results. It reads published numbers, not the business. Treat each name as a starting point for your own reading, not a finished decision.",
+    ];
+    return h("details", { class: "card" }, h("summary", { text: "The research rulebook" }), h("ol", { class: "rules" }, items.map((x) => h("li", { text: x }))));
+  }
+  function updateResearchCount() {
+    const R = DATA.research;
+    $("#research-count").textContent = R && R.picks.some((p) => p.st === "new") ? "new" : "";
+  }
+  function renderResearch(keepScroll) {
+    const V = $("#research-view"), R = DATA.research, y = window.scrollY;
+    if (!R) {
+      V.replaceChildren(h("section", { class: "card" }, h("h3", { text: "Research starts with the next nightly update" }),
+        h("p", { class: "note", style: "margin-top:0", text: "Tonight's run downloads the Nifty 500 fundamentals and fills this tab." })));
+      return;
+    }
+    const held = new Set(R.picks.filter((p) => !p.done).map((p) => p.s));
+    const buy = R.buy.filter((x) => !held.has(x.s));
+    const shown = R.picks.filter((p) => !p.done);
+    V.replaceChildren(...[
+      researchBand(R),
+      ...shown.map(researchPickCard),
+      h("section", { class: "card" }, h("h3", { text: `In the buy zone tonight (${buy.length})` }),
+        h("p", { class: "note", style: "margin-top:0", text: buy.length
+          ? "These pass every check tonight, best score first. Tap one for its valuation and checklist."
+          : "No other stock passes every check tonight." }),
+        buy.map((x) => researchRow(x, false))),
+      h("section", { class: "card" }, h("h3", { text: `Quality stocks waiting (${R.watch.length})` }),
+        h("p", { class: "note", style: "margin-top:0", text: R.watch.length
+          ? "These pass all six quality checks but not price or timing. Largest discount first, with what each still needs."
+          : "None tonight." }),
+        R.watch.map((x) => researchRow(x, true))),
+      researchFunnel(R), researchRecord(R), researchRules(R),
+      h("p", { class: "foot", text: "A fixed rulebook run on published numbers (fundamentals from TradingView's screener, prices from NSE). It is not personal advice from a registered adviser and knows nothing about your other holdings, income or goals. For information only, not investment advice." })].filter(Boolean));
+    if (keepScroll) window.scrollTo(0, y);
+  }
+
   // ---------------------------------------------------------------- live cues
   // GIFT Nifty, crude in US$, USD/INR and MCX gold and silver, fetched by the browser itself every 20 seconds
   // while the page is open. TradingView's quote scanner answers everything in one request; CNBC (crude, USD/INR)
@@ -1557,17 +1802,20 @@ td.hi { color: var(--deliv); font-weight: 600; }
     if (!DATA) return;
     updateTabCount();
     updatePickCount();
+    updateResearchCount();
     const m = location.hash.match(/^#s=(.+)$/);
     if (m) { $("#apphead").hidden = true; showDetail(decodeURIComponent(m[1])); return; }
     $("#apphead").hidden = false;
     $("#detail").hidden = true;
-    const onMtf = location.hash === "#mtf", onPicks = location.hash === "#picks";
-    $("#tab-stocks").setAttribute("aria-selected", String(!onMtf && !onPicks));
+    const onMtf = location.hash === "#mtf", onPicks = location.hash === "#picks", onResearch = location.hash === "#research";
+    $("#tab-stocks").setAttribute("aria-selected", String(!onMtf && !onPicks && !onResearch));
     $("#tab-mtf").setAttribute("aria-selected", String(onMtf));
     $("#tab-picks").setAttribute("aria-selected", String(onPicks));
-    $("#list-view").hidden = onMtf || onPicks;
+    $("#tab-research").setAttribute("aria-selected", String(onResearch));
+    $("#list-view").hidden = onMtf || onPicks || onResearch;
     $("#mtf-view").hidden = !onMtf;
     $("#picks-view").hidden = !onPicks;
+    $("#research-view").hidden = !onResearch;
     if (onMtf) {
       renderMTF();
       const target = prefill && document.getElementById("add-trade");
@@ -1575,6 +1823,9 @@ td.hi { color: var(--deliv); font-weight: 600; }
     } else if (onPicks) {
       renderPicks();
       window.scrollTo(0, picksScroll);
+    } else if (onResearch) {
+      renderResearch();
+      window.scrollTo(0, researchScroll);
     } else {
       renderChips();
       renderRows();
@@ -1603,11 +1854,13 @@ td.hi { color: var(--deliv); font-weight: 600; }
       const leave = () => {
         if (location.hash === "#mtf") mtfScroll = window.scrollY;
         else if (location.hash === "#picks") picksScroll = window.scrollY;
+        else if (location.hash === "#research") researchScroll = window.scrollY;
         else if (!location.hash.startsWith("#s=")) listScroll = window.scrollY;
       };
       $("#tab-stocks").addEventListener("click", () => { leave(); location.hash = ""; });
       $("#tab-mtf").addEventListener("click", () => { if (location.hash !== "#mtf") leave(); location.hash = "mtf"; });
       $("#tab-picks").addEventListener("click", () => { if (location.hash !== "#picks") leave(); location.hash = "picks"; });
+      $("#tab-research").addEventListener("click", () => { if (location.hash !== "#research") leave(); location.hash = "research"; });
       route();
     })
     .catch(() => {
