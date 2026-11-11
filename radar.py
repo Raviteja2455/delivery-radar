@@ -11,6 +11,10 @@ provisional FII/DII figures. History is kept as one small JSON file per trading 
 
 Every night the script also ranks all Nifty 100 stocks for a three-month swing pick, names one
 pick every ten days and tracks how each pick did; the pick log is data/picks.json.
+
+It also runs a research screen over the Nifty 500 (large, mid and small caps) for 6-month to
+2-year investments: quality checks, a fair value from four methods, and a buy only at a margin of
+safety below it. Fundamentals come from TradingView's screener; the research log is data/research.json.
 """
 from __future__ import annotations
 
@@ -41,15 +45,21 @@ URLS = {
     "n100": "https://nsearchives.nseindia.com/content/indices/ind_nifty100list.csv",
     "nn50": "https://nsearchives.nseindia.com/content/indices/ind_niftynext50list.csv",
     "n100_alt": "https://www.niftyindices.com/IndexConstituent/ind_nifty100list.csv",
+    "n500": "https://nsearchives.nseindia.com/content/indices/ind_nifty500list.csv",
+    "mid150": "https://nsearchives.nseindia.com/content/indices/ind_niftymidcap150list.csv",
+    "small250": "https://nsearchives.nseindia.com/content/indices/ind_niftysmallcap250list.csv",
+    "tv": "https://scanner.tradingview.com/india/scan",
     "bulk": "https://nsearchives.nseindia.com/content/equities/bulk.csv",
     "block": "https://nsearchives.nseindia.com/content/equities/block.csv",
     "fiidii": "https://www.nseindia.com/api/fiidiiTradeReact",
     "part": "https://nsearchives.nseindia.com/content/nsccl/fao_participant_oi_{d:%d%m%Y}.csv",
 }
-# Delivery history runs about nine months: the pick rule needs three months to warm up, and the
-# replay of past picks needs three more for each pick's result to be final.
-LOOKBACK = {"eq": 280, "fo": 45, "idx": 300, "part": 45}    # calendar days kept filled (first run backfills this)
-KEEP_DAYS = {"eq": 420, "fo": 90, "idx": 420, "part": 200}  # day files older than this are deleted
+# The first run fills about ten months of delivery history: the pick rule needs three months to warm
+# up, and the replay of past picks needs three more for each pick's result to be final. Day files are
+# then kept for a little over two years, so a research pick can be worked out afresh every night from
+# its whole holding period.
+LOOKBACK = {"eq": 300, "fo": 45, "idx": 300, "part": 45}    # calendar days kept filled (first run backfills this)
+KEEP_DAYS = {"eq": 800, "fo": 90, "idx": 800, "part": 200}  # day files older than this are deleted
 DEALS_KEEP = 200   # calendar days of bulk and block deals kept
 RECENT_DAYS = 5    # a failed download this recent stops the run; an older one only pauses the backfill
 FO_FLAG_DAYS = 21  # stored F&O days this recent are fetched again once if they lack the Nifty-expiry flag
@@ -67,6 +77,34 @@ HEADERS = {
     "Accept-Language": "en-IN,en;q=0.9",
     "Referer": "https://www.nseindia.com/",
 }
+# Fundamentals asked of TradingView's screener for the research screen: one request for the whole
+# Nifty 500. A column the server does not know is dropped and the request repeated, so a renamed
+# field costs that one reading instead of the whole screen.
+TV_COLS = (
+    "close", "currency", "fundamental_currency_code", "market_cap_basic", "sector", "industry",
+    "earnings_per_share_diluted_ttm", "earnings_per_share_basic_ttm", "price_earnings_ttm",
+    "book_value_per_share_fq", "book_value_per_share_fy", "price_book_fq",
+    "return_on_equity", "return_on_equity_fy", "return_on_assets", "return_on_assets_fy",
+    "return_on_invested_capital", "return_on_invested_capital_fy",
+    "debt_to_equity", "debt_to_equity_fy", "interst_cover_ttm", "interst_cover_fy", "net_debt_to_ebitda_fy",
+    "total_revenue_yoy_growth_ttm", "total_revenue_yoy_growth_fy", "total_revenue_cagr_5y",
+    "earnings_per_share_diluted_yoy_growth_ttm", "earnings_per_share_diluted_yoy_growth_fy",
+    "earnings_per_share_basic_cagr_5y", "net_income_cagr_5y", "net_income_yoy_growth_ttm",
+    "sustainable_growth_rate_ttm", "sustainable_growth_rate_fy",
+    "net_income_ttm", "net_income_fy", "free_cash_flow_ttm", "free_cash_flow_fy",
+    "cash_f_operating_activities_ttm", "cash_f_operating_activities_fy",
+    "operating_margin_ttm", "net_margin_ttm",
+    "dividends_yield_current", "dividend_payout_ratio_ttm", "dividend_payout_ratio_fy",
+    "piotroski_f_score_ttm", "piotroski_f_score_fy", "altman_z_score_ttm", "altman_z_score_fy",
+    "sloan_ratio_ttm", "sloan_ratio_fy",
+    "price_target_average", "price_target_median", "price_target_high", "price_target_low",
+    "recommendation_total", "recommendation_mark", "earnings_per_share_forecast_next_fy",
+    "SMA50", "SMA200", "price_52_week_high", "price_52_week_low", "Perf.3M", "Perf.6M", "Perf.Y",
+    "average_volume_30d_calc", "float_shares_percent_current",
+    "earnings_release_date", "earnings_release_next_date", "fiscal_period_end_current",
+)
+TV_CHUNK = 250
+
 # sec_bhavdata_full columns kept, in this order, per stock per day
 EQ_FIELDS = ("PREV_CLOSE", "OPEN_PRICE", "HIGH_PRICE", "LOW_PRICE", "CLOSE_PRICE",
              "TTL_TRD_QNTY", "TURNOVER_LACS", "NO_OF_TRADES", "DELIV_QTY", "DELIV_PER")
@@ -152,8 +190,26 @@ def weekdays(start, end):
 PICK_DEFAULTS = {"every_days": 10, "target_pct": 5.0, "window_days": 91, "stop_pct": 8.0}
 
 
+# Research portfolio: 6-month to 2-year investments from the Nifty 500, bought only at a margin of safety
+# below fair value. All percentages; config.json's "research" block overrides any of them.
+RESEARCH_DEFAULTS = {
+    "pot": 100000, "max_positions": 5, "every_days": 14, "max_sector": 2, "max_small": 2,
+    "discount_large": 20.0, "discount_mid": 25.0, "discount_small": 30.0,  # margin of safety: % below fair value needed to buy
+    "stop_large": 15.0, "stop_mid": 18.0, "stop_small": 22.0,         # closing-basis stop under the buy price
+    # Return demanded: the 10-year government bond yield (about 7.3% in November 2026) plus roughly
+    # 5 points for owning shares, and more for smaller companies. Revisit when bond yields move a point.
+    "coe_large": 12.5, "coe_mid": 13.5, "coe_small": 15.0,
+    "terminal_growth": 5.0, "growth_cap": 15.0, "growth_cap_lender": 12.0, "target_cap": 60.0,
+    "medium_days": 365, "long_days": 730,
+}
+
+
 def load_config():
     cfg = jload(ROOT / "config.json", {})
+    research = dict(RESEARCH_DEFAULTS)
+    for k, v in (cfg.get("research") or {}).items():
+        if k in research and isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
+            research[k] = int(v) if isinstance(RESEARCH_DEFAULTS[k], int) else float(v)
     pick = dict(PICK_DEFAULTS)
     for k, v in (cfg.get("pick") or {}).items():
         if k in pick and isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
@@ -168,7 +224,10 @@ def load_config():
                 "text": str(n["text"]),
                 "as_of": str(n.get("as_of", "")),
             }
-    return {"extra_symbols": extra, "notes": notes, "pick": pick}
+    # Stocks kept out of research picks by hand, with the reason: what a screen can't read (a pledge,
+    # a governance question, bad loans) is recorded here after reading the company's own filings.
+    skip = {str(k).strip().upper(): str(v).strip() for k, v in (cfg.get("research_skip") or {}).items() if str(v).strip()}
+    return {"extra_symbols": extra, "notes": notes, "pick": pick, "research": research, "research_skip": skip}
 
 
 # ----------------------------------------------------------------------------- NSE access
@@ -215,6 +274,39 @@ class Source:
                 err = e
                 time.sleep(3 * (attempt + 1))
         raise RuntimeError(f"NSE request kept failing: {url} ({err})")
+
+    def post_json(self, url, payload):
+        """POST a JSON query (TradingView's screener). Returns (HTTP status, parsed body or None)."""
+        if self.folder:
+            # Offline: tv_scan.json holds {"unknown": [columns to refuse], "rows": {ticker: {column: value}}}.
+            doc = jload(self.folder / "tv_scan.json", None)
+            if doc is None:
+                return 404, None
+            bad = [c for c in payload["columns"] if c in doc.get("unknown", [])]
+            if bad:
+                return 400, {"error": f'Unknown field "{bad[0]}"', "data": None}
+            data = [{"s": t, "d": [doc["rows"][t].get(c) for c in payload["columns"]]}
+                    for t in payload["symbols"]["tickers"] if t in doc["rows"]]
+            return 200, {"totalCount": len(data), "data": data}
+        import requests
+        err = None
+        for attempt in range(3):
+            try:
+                r = requests.post(url, data=json.dumps(payload), timeout=40, headers={
+                    "User-Agent": HEADERS["User-Agent"], "Content-Type": "text/plain;charset=UTF-8",
+                    "Origin": "https://in.tradingview.com", "Referer": "https://in.tradingview.com/"})
+                time.sleep(PAUSE)
+                try:
+                    body = r.json()
+                except ValueError:
+                    body = None
+                if r.status_code in (200, 400):
+                    return r.status_code, body
+                err = f"HTTP {r.status_code}"
+            except Exception as e:
+                err = e
+            time.sleep(3 * (attempt + 1))
+        raise RuntimeError(f"screener request kept failing: {url} ({err})")
 
 
 # ----------------------------------------------------------------------------- parsers
@@ -293,7 +385,7 @@ def parse_part(text):
 
 
 def parse_idx(text):
-    names = {"nifty 50": "nifty", "india vix": "vix", "nifty bank": "bank"}
+    names = {"nifty 50": "nifty", "india vix": "vix", "nifty bank": "bank", "nifty 500": "n500"}
     day, out = None, {}
     for r in csv_rows(text):
         key = names.get((r.get("Index Name") or "").strip().lower())
@@ -375,6 +467,87 @@ def fetch_n100(src, n50):
     return rows if good(rows) else []
 
 
+def fetch_n500(src, meta, names):
+    """The research universe: the Nifty 500, each stock tagged large (Nifty 100), mid (Nifty Midcap 150)
+    or small (Nifty Smallcap 250). Keeps the saved list when NSE does not answer."""
+    def read(key):
+        try:
+            text = src.get(URLS[key])
+        except RuntimeError as e:
+            print(f"{key} list unavailable: {e}")
+            return []
+        return parse_n50(text) if text else []
+
+    rows = read("n500")
+    least = 100 if src.folder else 450  # the offline sample has a short list
+    if not least <= len({x["s"] for x in rows}) <= 520:
+        print("NSE did not send the Nifty 500 list; " + ("using the list saved earlier." if meta.get("nifty500")
+              else "the research screen covers the Nifty 100 only."))
+        return
+    mid, small = {x["s"] for x in read("mid150")}, {x["s"] for x in read("small250")}
+    large = set(meta.get("nifty100", []))
+    cap = {}
+    for x in rows:
+        s = x["s"]
+        names.setdefault(s, {"n": x["n"], "ind": x["ind"]})
+        cap[s] = "L" if s in large else "M" if s in mid else "S" if s in small else None
+    meta["nifty500"] = [x["s"] for x in rows]
+    meta["cap"] = cap  # None where the mid and small lists did not arrive; market value decides those
+
+
+def tv_tickers(sym):
+    """The screener's names for an NSE symbol. It writes M&M as M_M in some places and M&M in others,
+    so both are asked for; the one it doesn't know is ignored."""
+    sym = sym.upper()
+    return list(dict.fromkeys(["NSE:" + re.sub(r"[^A-Z0-9]", "_", sym), "NSE:" + sym]))
+
+
+def fetch_fundamentals(src, symbols, today):
+    """One fundamentals snapshot for `symbols` from TradingView's screener, saved as data/fund.json.
+
+    Keeps the previous snapshot when the screener does not answer; the app then shows its date."""
+    back = {t: s for s in symbols for t in tv_tickers(s)}
+    tickers = sorted(back)
+    cols, dropped, rows = list(TV_COLS), [], {}
+    try:
+        for _ in range(len(TV_COLS)):  # each pass either completes or drops one column the screener refuses
+            rows, unknown = {}, None
+            for k in range(0, len(tickers), TV_CHUNK):
+                query = {"symbols": {"tickers": tickers[k:k + TV_CHUNK], "query": {"types": []}}, "columns": cols}
+                status, body = src.post_json(URLS["tv"], query)
+                if status == 200 and body and isinstance(body.get("data"), list):
+                    for x in body["data"]:
+                        if x.get("s") in back and isinstance(x.get("d"), list) and len(x["d"]) == len(cols):
+                            rows[back[x["s"]]] = x["d"]
+                    continue
+                m = re.search(r'Unknown field "([^"]+)"', str((body or {}).get("error", "")))
+                if status == 400 and m and m.group(1) in cols and len(cols) > 10:
+                    unknown = m.group(1)
+                    break
+                raise RuntimeError(f"unexpected screener answer (HTTP {status}): {str(body)[:200]}")
+            if unknown is None:
+                break
+            cols.remove(unknown)
+            dropped.append(unknown)
+    except RuntimeError as e:
+        print(f"Fundamentals unavailable tonight: {e}")
+        return
+    save_fundamentals(rows, cols, dropped, symbols, today)
+
+
+def save_fundamentals(rows, cols, dropped, symbols, today):
+    if len(rows) < 0.5 * len(symbols):
+        print(f"Fundamentals: only {len(rows)} of {len(symbols)} stocks answered, so the earlier snapshot is kept.")
+        return
+    if dropped:
+        print(f"Fundamentals: the screener no longer has {', '.join(dropped)}")
+    missing = sorted(set(symbols) - set(rows))
+    if missing:
+        print(f"Fundamentals: no row for {len(missing)} stocks: {', '.join(missing[:25])}{' …' if len(missing) > 25 else ''}")
+    jsave(DATA / "fund.json", {"d": today.isoformat(), "cols": cols, "rows": rows})
+    print(f"Fundamentals: {len(rows)} of {len(symbols)} stocks, {len(cols)} readings each")
+
+
 def tracked_symbols(doc, today, rules):
     """Symbols of live picks still inside their three-month window."""
     cut = (today - timedelta(days=rules["window_days"] + 30)).isoformat()
@@ -414,11 +587,15 @@ def update(src, today=None):
         print("NSE did not send the Nifty 100 list today; using the list saved earlier.")
     else:
         print("NSE did not send the Nifty 100 list; tonight covers the Nifty 50 only and no pick is made.")
+    fetch_n500(src, meta, names)
     meta["names"] = names
     # Stocks with a live pick stay in the downloads even if they leave the index, so the pick can be tracked.
     tracked = tracked_symbols(jload(DATA / "picks.json", {}), today, cfg["pick"])
-    universe = sorted(set(meta["nifty50"]) | set(meta.get("nifty100", [])) | set(cfg["extra_symbols"]) | tracked)
+    tracked |= {p["s"] for p in jload(DATA / "research.json", {}).get("picks", []) if p.get("s") and not p.get("done")}
+    research = set(meta.get("nifty500", [])) or set(meta.get("nifty100", []))
+    universe = sorted(set(meta["nifty50"]) | set(meta.get("nifty100", [])) | research | set(cfg["extra_symbols"]) | tracked)
     uset = set(universe)
+    fetch_fundamentals(src, sorted(research | tracked), today)
 
     missing = {k: set(v) for k, v in meta.get("missing", {}).items()}
     for k in ("eq", "fo", "idx", "part"):
@@ -524,7 +701,7 @@ def update(src, today=None):
     meta["last_update"] = now.isoformat(timespec="seconds")
     jsave(DATA / "meta.json", meta)
     print(f"New day files: {fetched}")
-    build()
+    build(make_picks=True)
 
 
 # ----------------------------------------------------------------------------- analytics
@@ -1030,7 +1207,7 @@ def pick_stats(items, base):
     }
 
 
-def build_picks(adj, days, idx, meta, cfg, names, asof):
+def build_picks(adj, days, idx, meta, cfg, names, asof, make_picks=True):
     """Make tonight's pick if one is due, replay the rule over the stored history, and score both.
 
     Returns the app's "picks" block and each ranked stock's readings for tonight. Live picks are kept
@@ -1064,7 +1241,7 @@ def build_picks(adj, days, idx, meta, cfg, names, asof):
     if not ready:
         note = ("The Nifty 100 list or its three months of history isn't complete yet, so no pick is made. "
                 "It fills in over the next nightly runs.")
-    elif asof >= due:
+    elif asof >= due and make_picks:
         cut = plus_days(asof, -rules["window_days"])
         s = pick_choose(feats, order, asof, {p["s"] for p in live if p["d"] >= cut}, cfg["notes"])
         if s:
@@ -1127,7 +1304,498 @@ def build_picks(adj, days, idx, meta, cfg, names, asof):
     return block, tonight
 
 
-def build():
+# ----------------------------------------------------------------------------- research screen
+# A fund manager's routine, written as fixed rules. 1) Quality first: only profitable, well-financed,
+# growing businesses whose profit shows up as cash. 2) Fair value from four independent methods; the
+# estimate is the second-lowest, so all but one must say the stock is worth at least that much.
+# 3) Buy only at a margin of safety below it, larger for smaller companies. 4) Never buy a falling
+# stock, or one about to report results. 5) Small equal positions, spread across sectors. 6) Sell at
+# the target, at the stop, when the business stops passing the checks, when fair value is cut down to
+# the price, or when time is up.
+CAPS = {"L": "large", "M": "mid", "S": "small"}
+RESEARCH_MIN = {                 # entry checks
+    "roe": 15.0, "roe_fin": 13.0,          # return on equity, %
+    "de": 1.0, "de_small": 0.6,            # debt to equity (non-financials)
+    "icov": 3.0,                           # operating profit covers interest this many times
+    "growth": 8.0,                         # long-run sales growth, % a year
+    "pio": 5,                              # Piotroski F-score, 0-9 (non-financials)
+    "sloan": 25.0,                         # accruals as % of assets (Sloan ratio): above this, profit is running ahead of cash
+    "turnover_cr": 5.0,                    # median daily turnover, ₹ crore
+    "lenses": 3,                           # fair-value methods that must be available
+    "analysts": 5,                         # analysts needed before their target counts
+    "results_gap": 3,                      # no new pick when results are due within this many days
+}
+RESEARCH_HOLD = {"roe": 10.0, "de": 1.5, "pio": 3}   # a holding that breaks any of these is sold
+FV_CUT = 10.0                    # ...and so is one whose fair value has been cut this much, down to the price or below
+REPICK_DAYS = 90                 # a stock sold at a loss or on failed checks is not picked again for this long
+LONG_TERM = {"roe": 18.0, "growth": 12.0, "de": 0.5, "pio": 6}  # compounders get the 1-2 year horizon
+PE_CAP, LENS_CAP = 35.0, 2.0     # no method may use a P/E above 35 or put fair value above twice the price
+LONG_GROWTH = 12.0               # a 1-2 year target is fair value one year on, grown at this rate at most
+RESEARCH_PARTS = (               # reading, weight in the 0-100 score, label
+    ("up", 35, "Discount to fair value"),
+    ("roe", 12, "Return on equity"),
+    ("pio", 10, "Financial strength (Piotroski)"),
+    ("cash", 8, "Cash conversion (return on assets for lenders)"),
+    ("g", 10, "Long-run growth"),
+    ("eps_g", 10, "Earnings growth, last 12 months"),
+    ("p6m", 8, "6-month return"),
+    ("dl", 7, "Delivery % last 10 sessions vs the 50 before"),
+)
+
+
+def fund_rows(doc):
+    """The stored screener snapshot as {symbol: readings}, using each reading's latest-period value and
+    falling back to the last full year where the latest is missing."""
+    cols = doc.get("cols") or []
+    out = {}
+    for sym, vals in (doc.get("rows") or {}).items():
+        r = dict(zip(cols, vals))
+
+        def first(*keys):
+            for k in keys:
+                v = r.get(k)
+                if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
+                    return float(v)
+            return None
+
+        out[sym] = {
+            "px": first("close"), "cur": r.get("fundamental_currency_code") or r.get("currency"),
+            "mcap": first("market_cap_basic"), "sector": r.get("sector") or "", "industry": r.get("industry") or "",
+            "eps": first("earnings_per_share_diluted_ttm", "earnings_per_share_basic_ttm"),
+            "bvps": first("book_value_per_share_fq", "book_value_per_share_fy"),
+            "roe": first("return_on_equity", "return_on_equity_fy"),
+            "roa": first("return_on_assets", "return_on_assets_fy"),
+            "de": first("debt_to_equity", "debt_to_equity_fy"),
+            "icov": first("interst_cover_ttm", "interst_cover_fy"),
+            "rev_g": first("total_revenue_yoy_growth_ttm", "total_revenue_yoy_growth_fy"),
+            "rev_c5": first("total_revenue_cagr_5y"),
+            "eps_g": first("earnings_per_share_diluted_yoy_growth_ttm", "earnings_per_share_diluted_yoy_growth_fy",
+                           "net_income_yoy_growth_ttm"),
+            "eps_c5": first("earnings_per_share_basic_cagr_5y", "net_income_cagr_5y"),
+            "sgr": first("sustainable_growth_rate_ttm", "sustainable_growth_rate_fy"),
+            "ni": first("net_income_ttm", "net_income_fy"),
+            "fcf": first("free_cash_flow_ttm", "free_cash_flow_fy"),
+            "cfo": first("cash_f_operating_activities_ttm", "cash_f_operating_activities_fy"),
+            "dy": first("dividends_yield_current"),
+            "pio": first("piotroski_f_score_ttm", "piotroski_f_score_fy"),
+            "eps_f": first("earnings_per_share_forecast_next_fy"),
+            "tgt": first("price_target_median", "price_target_average"),
+            "tgt_n": first("recommendation_total"),
+            "sma200": first("SMA200"), "p6m": first("Perf.6M"),
+            "sloan": first("sloan_ratio_ttm", "sloan_ratio_fy"),
+            "next": epoch_day(first("earnings_release_next_date")),
+        }
+    return out
+
+
+def epoch_day(t):
+    """A Unix time as an Indian calendar date, or None."""
+    try:
+        return datetime.fromtimestamp(t, IST).date().isoformat() if t and t > 0 else None
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def dcf_value(eps, roe, g1, r, g2):
+    """Value per share of the cash a shareholder can take out: five years growing at g1, five years
+    fading to g2, then g2 for ever, discounted at r (all in %). Each year's payout is what is left
+    after reinvesting g/ROE of the earnings, which is what that growth costs. The long-run return on
+    equity is held to 18% at most, because competition erodes exceptional returns."""
+    roe, g1, r, g2 = roe / 100, g1 / 100, r / 100, g2 / 100
+    value, e = 0.0, eps
+    for t in range(1, 11):
+        g = g1 if t <= 5 else g1 + (g2 - g1) * (t - 5) / 5
+        e *= 1 + g
+        value += e * max(0.0, 1 - g / roe) / (1 + r) ** t
+    last = e * (1 + g2) * max(0.0, 1 - g2 / min(roe, 0.18)) / (r - g2)
+    return value + last / (1 + r) ** 10
+
+
+def research_growth(f, cap, fin=False):
+    """The growth rate the valuation may assume, % a year: the lower of five-year sales and earnings
+    growth, pulled half-way down to the last twelve months' sales growth when that is slower,
+    never negative and never above the cap. Without five-year figures the last year stands in, capped at 12%.
+    A lender's growth is also held to what its retained profit can fund (return on equity x share retained),
+    because lending more needs more capital."""
+    long_run = [x for x in (f["rev_c5"], f["eps_c5"]) if x is not None]
+    if long_run:
+        g = min(long_run)
+        if f["rev_g"] is not None and f["rev_g"] < g:
+            g = (g + f["rev_g"]) / 2
+    else:
+        recent = [x for x in (f["rev_g"], f["eps_g"]) if x is not None]
+        if not recent:
+            return None
+        g, cap = min(recent), min(cap, 12.0)
+    if fin and f["sgr"] is not None:
+        g = min(g, f["sgr"])
+    return max(0.0, min(g, cap))
+
+
+def normal_eps(f, g):
+    """Earnings per share a valuation may rely on: the last twelve months', but no more than last
+    year's grown at the long-run rate, and no more than analysts expect for next year.
+
+    Refiners, metals and other cyclicals look cheapest, with their best return on equity, at the top of
+    their cycle. Capping a boom year this way is the through-the-cycle adjustment a fund manager makes."""
+    eps = f["eps"]
+    if g is not None and f["eps_g"] is not None and f["eps_g"] > -90:
+        eps = min(eps, f["eps"] / (1 + f["eps_g"] / 100) * (1 + g / 100))
+    if f["eps_f"] is not None and f["eps_f"] > 0 and (f["tgt_n"] or 0) >= RESEARCH_MIN["analysts"]:
+        eps = min(eps, f["eps_f"])
+    return eps
+
+
+def research_assess(sym, f, c, cap, fin, peers_pe, R):
+    """Run one stock through the valuation: growth, normalised earnings, the four fair-value methods,
+    the blend, and the buy-below price. Returns None when the basics (price, earnings, return on
+    equity) are missing."""
+    if not c or f["eps"] is None or f["eps"] <= 0 or f["roe"] is None:
+        return None
+    r, mos = R["coe_" + CAPS[cap]], R["discount_" + CAPS[cap]]
+    g = research_growth(f, R["growth_cap_lender"] if fin else R["growth_cap"], fin)
+    eps = normal_eps(f, g)
+    roe = f["roe"] * eps / f["eps"]  # return on equity on the same normalised earnings
+    if eps <= 0 or roe <= R["terminal_growth"]:
+        return None
+    top = c * LENS_CAP
+    lens = {"dcf": None, "lynch": None, "sector": None, "street": None}
+    if g is not None:
+        lens["dcf"] = dcf_value(eps, roe, g, r, R["terminal_growth"])
+        lens["lynch"] = eps * max(8.0, min(g + (f["dy"] or 0.0), PE_CAP))  # Lynch: a fair P/E equals growth plus yield
+    if peers_pe:
+        lens["sector"] = eps * min(peers_pe, PE_CAP)
+    if f["tgt"] and (f["tgt_n"] or 0) >= RESEARCH_MIN["analysts"]:
+        lens["street"] = f["tgt"] / (1 + r / 100)  # a 12-month target, brought back to today
+    have = sorted(min(v, top) for v in lens.values() if v is not None and v > 0)
+    # Fair value is the second-lowest method: all but one of them must say the stock is worth at least
+    # this much. Two of the methods lean on the same growth figure, so the middle would trust it twice.
+    fv = have[1] if len(have) >= RESEARCH_MIN["lenses"] else None
+    long_term = (fv is not None and g is not None and roe >= LONG_TERM["roe"] and g >= LONG_TERM["growth"]
+                 and (fin or (f["de"] is not None and f["de"] <= LONG_TERM["de"]))
+                 and (f["pio"] is None or f["pio"] >= LONG_TERM["pio"]))
+    # A 1-2 year pick aims at fair value one year on; a 6-12 month pick at today's. Neither target may
+    # sit more than `target_cap` above the price: a wider gap usually means the numbers miss something.
+    target = None
+    if fv:
+        target = min(fv * (1 + min(g, LONG_GROWTH) / 100) if long_term else fv, c * (1 + R["target_cap"] / 100))
+    return {
+        "g": g, "r": r, "mos": mos, "lens": lens, "n_lens": len(have), "fv": fv, "eps": eps, "roe": roe,
+        "up": pct(fv, c) if fv else None, "buy_below": fv * (1 - mos / 100) if fv else None,
+        "hz": "L" if long_term else "M", "target": target, "tgt_pct": pct(target, c) if target else None,
+        "pe": c / f["eps"], "pe_n": c / eps, "pb": c / f["bvps"] if f["bvps"] and f["bvps"] > 0 else None,
+    }
+
+
+def research_checks(f, a, cap, fin, turnover, c, sma200, slot, asof):
+    """The entry checklist as [key, passed] pairs, quality first. `a` is research_assess's result."""
+    m = RESEARCH_MIN
+    growth = f["rev_c5"] if f["rev_c5"] is not None else f["rev_g"]
+    if fin:
+        cash = f["roa"] is not None and f["roa"] >= 1.0
+    else:  # profit that turns into free cash, and is not mostly accruals
+        cash = (((f["fcf"] is not None and f["fcf"] > 0) or (f["fcf"] is None and f["cfo"] is not None and f["cfo"] > 0))
+                and (f["sloan"] is None or f["sloan"] <= m["sloan"]))
+    q = [
+        ["roe", a["roe"] >= (m["roe_fin"] if fin else m["roe"])],
+        ["debt", True if fin else (f["de"] is not None and f["de"] <= (m["de_small"] if cap == "S" else m["de"])
+                                   and (f["icov"] is None or f["icov"] >= m["icov"]))],
+        ["growth", growth is not None and growth >= m["growth"] and (f["rev_g"] is None or f["rev_g"] >= 0)
+                   and (f["eps_g"] is None or f["eps_g"] >= 0)],
+        # The screen can't read a lender's bad loans, so it wants enough analysts watching instead.
+        ["strength", (f["tgt_n"] or 0) >= m["analysts"] if fin else (f["pio"] is not None and f["pio"] >= m["pio"])],
+        ["cash", cash],
+        ["liquid", turnover is not None and turnover >= m["turnover_cr"] and c <= slot],
+    ]
+    due_in = (date.fromisoformat(f["next"]) - date.fromisoformat(asof)).days if f["next"] else None
+    rest = [
+        ["value", a["buy_below"] is not None and c <= a["buy_below"]],
+        ["trend", sma200 is not None and c > sma200],
+        ["street", a["lens"]["street"] is None or f["tgt"] >= c],
+        # Results within a few days can move the price and the fair value; wait for them.
+        ["results", not (due_in is not None and 0 <= due_in <= m["results_gap"])],
+    ]
+    return q, rest
+
+
+def hold_broken(f, fin):
+    """Why a holding no longer passes the looser checks kept after buying, or None."""
+    h = RESEARCH_HOLD
+    if f["eps"] is not None and f["eps"] <= 0:
+        return "earnings turned negative"
+    if f["roe"] is not None and f["roe"] < h["roe"]:
+        return f"return on equity fell to {f['roe']:.0f}%"
+    if not fin and f["de"] is not None and f["de"] > h["de"]:
+        return f"debt rose to {f['de']:.1f} times equity"
+    if f["pio"] is not None and f["pio"] <= h["pio"]:
+        return f"financial strength score fell to {f['pio']:.0f} of 9"
+    return None
+
+
+def research_track(p, rows, asof):
+    """Work out a research pick from the stock's split-adjusted history, afresh every night, so a day
+    file that arrives late corrects it. Bought at the first open after the pick, but only if that open
+    is still at or below the buy-below price; otherwise the pick lapses. Sold at the close on the first
+    session that closes at or above the target, or at or below the stop, or once time is up."""
+    if p.get("done") or p.get("bb") is None or p.get("tgt") is None:
+        return
+    i = next((k for k in range(len(rows) - 1, -1, -1) if rows[k]["d"] == p["d"]), None)
+    if i is None or not rows[i]["c"] or i + 1 >= len(rows):
+        return  # the session after the pick has not traded yet
+    k = rows[i]["c"] / p["c0"]  # splits and bonuses since the pick: restate its prices in today's shares
+    first = rows[i + 1]
+    entry = first["o"] or first["c"]
+    if not entry:
+        return
+    target, limit = p["tgt"] * k, p["bb"] * k
+    p.update({"ed": first["d"], "e": rnd(entry), "k": round(k, 6), "tgt_px": rnd(target), "bb_px": rnd(limit),
+              "stop_px": rnd(entry * (1 - p["stop_pct"] / 100)), "tgt_pct": rnd(pct(target, entry), 1)})
+    if entry > limit:
+        p.update({"st": "lapsed", "xd": first["d"], "done": True, "last": rnd(first["c"]), "ld": first["d"], "ret": None})
+        return
+    peak = low = 0.0
+    state = "open"
+    for x in rows[i + 1:]:
+        if x["d"] > asof:
+            break
+        if x["c"] is None:
+            continue
+        ret = pct(x["c"], entry)
+        peak, low = max(peak, pct(x["h"] or x["c"], entry)), min(low, pct(x["l"] or x["c"], entry))
+        p.update({"last": rnd(x["c"]), "ld": x["d"], "ret": rnd(ret), "peak": rnd(peak), "low": rnd(low)})
+        held = (date.fromisoformat(x["d"]) - date.fromisoformat(first["d"])).days
+        if x["c"] >= target:
+            state = "target"
+        elif ret <= -p["stop_pct"]:
+            state = "stopped"
+        elif held >= p["days"]:
+            state = "timeup"
+        if state != "open":
+            p.update({"xd": x["d"], "done": True})
+            break
+    p["st"] = state
+
+
+def build_research(days, adj, idx, meta, cfg, names, asof, make_picks):
+    """Screen the Nifty 500, keep the research portfolio's log up to date, and name a new pick when a
+    slot is free, one is due and a stock clears every check.
+
+    Returns the app's "research" block and, per stock, what its own page shows."""
+    R, skip = cfg["research"], cfg["research_skip"]
+    doc = jload(DATA / "fund.json", {})
+    fund = fund_rows(doc)
+    n500 = meta.get("nifty500") or meta.get("nifty100") or []
+    capmap = dict(meta.get("cap") or {})
+    large = set(meta.get("nifty100", []))
+    # Where the mid and small lists did not arrive, market value decides: the 150 largest outside the Nifty 100 are mid caps.
+    loose = sorted((s for s in n500 if capmap.get(s) is None and s not in large),
+                   key=lambda s: -(fund.get(s, {}).get("mcap") or 0))
+    for k, s in enumerate(loose):
+        capmap[s] = "M" if k < 150 else "S"
+    for s in n500:
+        if s in large:
+            capmap[s] = "L"
+    slot = R["pot"] / R["max_positions"]
+    idays = sorted(d for d in idx if idx[d].get("n500") or idx[d].get("nifty"))
+
+    def index_on(d, key):  # index close on d, or on the last session before it
+        k = bisect_right(idays, d)
+        while k and not idx[idays[k - 1]].get(key):
+            k -= 1
+        return idx[idays[k - 1]][key] if k else None
+
+    # Each stock's readings, valuation and checks.
+    base = {}
+    for s in n500:
+        f, rows = fund.get(s), adj.get(s)
+        if not f or not rows or rows[-1]["d"] != asof or not rows[-1]["c"]:
+            continue
+        c = rows[-1]["c"]
+        if f["cur"] not in (None, "INR") or not f["px"] or abs(f["px"] / c - 1) > 0.03:
+            continue  # the screener's price disagrees with NSE's close: don't trust its other numbers either
+        base[s] = (f, c, names.get(s, {}).get("ind", "") == "Financial Services")
+    by_group = {}
+    for s, (f, c, fin) in base.items():
+        if f["eps"] and f["eps"] > 0 and 0 < c / f["eps"] <= 80:
+            for group in (("i", f["industry"]), ("s", f["sector"]), ("a", "")):
+                by_group.setdefault(group, []).append(c / f["eps"])
+
+    def median(xs):
+        xs = sorted(xs)
+        m = len(xs) // 2
+        return xs[m] if len(xs) % 2 else (xs[m - 1] + xs[m]) / 2
+
+    def peers_pe(f):  # median P/E of the closest group with at least eight profitable peers
+        for group in (("i", f["industry"]), ("s", f["sector"]), ("a", "")):
+            if group[1] is not None and len(by_group.get(group, [])) >= 8:
+                return median(by_group[group])
+        return None
+
+    cards, funnel = {}, {"universe": len(n500), "data": len(base), "valued": 0, "quality": 0, "trend": 0, "buy": 0}
+    for s, (f, c, fin) in base.items():
+        cap = capmap.get(s) or "S"
+        a = research_assess(s, f, c, cap, fin, peers_pe(f), R)
+        if not a or a["fv"] is None:
+            continue
+        funnel["valued"] += 1
+        rows = adj[s]
+        turn = sorted(x["tl"] / 100 for x in rows[-20:] if x["tl"])
+        turnover = turn[len(turn) // 2] if turn else None
+        closes = [x["c"] for x in rows[-200:] if x["c"]]
+        sma200 = avg(closes) if len(closes) >= 200 else f["sma200"]
+        p6m = pct(c, rows[-127]["c"]) if len(rows) >= 127 and rows[-127]["c"] else f["p6m"]
+        pf = pick_features(rows, len(rows) - 1)
+        q, rest = research_checks(f, a, cap, fin, turnover, c, sma200, slot, asof)
+        cash = f["roa"] if fin else (f["fcf"] / f["ni"] if f["fcf"] is not None and f["ni"] and f["ni"] > 0 else None)
+        cards[s] = {"f": f, "a": a, "c": c, "cap": cap, "fin": fin, "q": q, "rest": rest, "sma200": sma200,
+                    "turnover": turnover, "quality": all(ok for _, ok in q), "all": all(ok for _, ok in q + rest),
+                    "read": {"up": a["up"], "roe": a["roe"], "pio": f["pio"], "cash": cash, "g": a["g"],
+                             "eps_g": f["eps_g"], "p6m": p6m, "dl": pf["dl"] if pf else None}}
+    good = sorted(s for s in cards if cards[s]["quality"])
+    funnel["quality"] = len(good)
+    funnel["trend"] = sum(1 for s in good if dict(cards[s]["rest"])["trend"])
+    funnel["buy"] = sum(1 for s in good if cards[s]["all"])
+    # Score the quality stocks against each other, 0-100.
+    for key, w, _ in RESEARCH_PARTS:
+        vals = [cards[s]["read"][key] for s in good if cards[s]["read"][key] is not None]
+        ranked = sorted(vals)
+        for s in good:
+            v = cards[s]["read"][key]
+            if v is None or len(ranked) < 2:
+                q = 50.0  # no reading: neither helped nor hurt
+            else:
+                below = bisect_left(ranked, v)
+                q = (below + (bisect_right(ranked, v) - below - 1) / 2) / (len(ranked) - 1) * 100
+            cards[s].setdefault("p", []).append(q)
+    for s in good:
+        cards[s]["sc"] = sum(w * q for (_, w, _), q in zip(RESEARCH_PARTS, cards[s]["p"])) / 100
+
+    def row(s):  # what the app shows for one stock
+        x = cards[s]
+        f, a = x["f"], x["a"]
+        stop = R["stop_" + CAPS[x["cap"]]]
+        return {
+            "s": s, "n": names.get(s, {}).get("n", s), "ind": names.get(s, {}).get("ind", ""), "cap": x["cap"], "fin": int(x["fin"]),
+            "c": rnd(x["c"]), "fv": rnd(a["fv"]), "up": rnd(a["up"], 1), "bb": rnd(a["buy_below"]), "mos": a["mos"],
+            "hz": a["hz"], "tgt": rnd(a["target"]), "tgt_pct": rnd(a["tgt_pct"], 1),
+            "stop_pct": stop, "sc": rnd(x.get("sc"), 1), "p": [whole(q) for q in x.get("p", [])],
+            "lens": {k: rnd(v) for k, v in a["lens"].items()}, "g": rnd(a["g"], 1), "r": a["r"],
+            "pe": rnd(a["pe"], 1), "pe_n": rnd(a["pe_n"], 1), "eps_n": rnd(a["eps"]), "roe_n": rnd(a["roe"], 1),
+            "pb": rnd(a["pb"], 1), "roe": rnd(f["roe"], 1), "roa": rnd(f["roa"], 1),
+            "de": rnd(f["de"]), "icov": rnd(f["icov"], 1), "pio": whole(f["pio"]), "dy": rnd(f["dy"], 1),
+            "rev_c5": rnd(f["rev_c5"], 1), "eps_c5": rnd(f["eps_c5"], 1), "rev_g": rnd(f["rev_g"], 1), "eps_g": rnd(f["eps_g"], 1),
+            "cash": rnd(x["read"]["cash"], 2), "sloan": rnd(f["sloan"], 1), "p6m": rnd(x["read"]["p6m"], 1), "sma200": rnd(x["sma200"]),
+            "turn": rnd(x["turnover"], 1), "street": rnd(f["tgt"]), "street_n": whole(f["tgt_n"]),
+            "mcap": whole(f["mcap"] / 1e7) if f["mcap"] else None, "eps": rnd(f["eps"]), "next": f["next"],
+            "skip": skip.get(s),
+            "q": [[k, int(ok)] for k, ok in x["q"]], "rest": [[k, int(ok)] for k, ok in x["rest"]],
+        }
+
+    # The log: work out each open pick, then check its business and its fair value still hold up.
+    log = jload(DATA / "research.json", {})
+    picks = [p for p in log.get("picks", []) if p.get("d") and p.get("s")]
+    fresh = bool(doc.get("d")) and (date.fromisoformat(asof) - date.fromisoformat(doc["d"])).days <= 7
+    for p in picks:
+        if adj.get(p["s"]):
+            research_track(p, adj[p["s"]], asof)
+        now = cards.get(p["s"])
+        if p["st"] == "open" and fresh and p["ld"] == asof:
+            why = hold_broken(fund[p["s"]], p.get("fin")) if p["s"] in fund else None
+            was = p["fv"] * p.get("k", 1.0)  # fair value on the day of the pick, in today's shares
+            if why:
+                p.update({"st": "broken", "xd": asof, "done": True, "note": why})
+            elif now and now["a"]["fv"] <= now["c"] and now["a"]["fv"] <= was * (1 - FV_CUT / 100):
+                p.update({"st": "revalued", "xd": asof, "done": True,
+                          "note": f"fair value was cut from ₹{was:,.0f} to ₹{now['a']['fv']:,.0f}, which is no longer above the price"})
+        if p.get("i0") is None:
+            p["i0"] = index_on(p["d"], p.get("ikey", "nifty"))  # kept with the pick: index files are not stored for ever
+        i1 = index_on(p.get("xd") or asof, p.get("ikey", "nifty"))
+        p["idx"] = rnd(pct(i1, p["i0"])) if p["i0"] and i1 and p["st"] not in ("new", "lapsed") else None
+        if now and not p.get("done"):
+            p["fv_now"] = rnd(now["a"]["fv"])
+
+    # A new pick: at most one every `every_days`, only into a free slot, only if a stock clears everything,
+    # and only on a night when the fundamentals and the prices are from the same session.
+    real = [p for p in picks if p["st"] != "lapsed"]
+    open_now = [p for p in real if not p.get("done")]
+    last_d = max((p["d"] for p in real), default=None)
+    due = plus_days(last_d, R["every_days"]) if last_d else asof
+    ready = bool(n500) and fresh and funnel["valued"] >= 0.5 * len(n500)
+    note = None
+    held = {p["s"] for p in open_now}
+    # No second try at a stock that just opened above its buy price, and none soon after a losing exit.
+    recent = {p["s"] for p in picks if p["st"] == "lapsed" and p["d"] > plus_days(asof, -R["every_days"])}
+    recent |= {p["s"] for p in real if p.get("done") and p["st"] != "target" and (p.get("xd") or p["d"]) > plus_days(asof, -REPICK_DAYS)}
+    sectors = {}
+    for p in open_now:
+        sectors[p.get("ind", "")] = sectors.get(p.get("ind", ""), 0) + 1
+    smalls = sum(1 for p in open_now if p.get("cap") == "S")
+
+    def allowed(s):
+        return (s not in held and s not in recent and s not in skip
+                and sectors.get(names.get(s, {}).get("ind", ""), 0) < R["max_sector"]
+                and not (cards[s]["cap"] == "S" and smalls >= R["max_small"]))
+
+    buyable = sorted((s for s in good if cards[s]["all"]), key=lambda s: (-cards[s]["sc"], s))
+    if not ready:
+        note = ("Fundamentals for the Nifty 500 haven't arrived or are more than a week old, so no research pick is made. "
+                "The screen resumes when the next snapshot comes in.")
+    elif make_picks and doc.get("d") == asof and asof >= due and len(open_now) < R["max_positions"]:
+        s = next((s for s in buyable if allowed(s)), None)
+        if s:
+            x, r = cards[s], row(s)
+            ikey = "n500" if idx.get(asof, {}).get("n500") else "nifty"
+            new = {"d": asof, "s": s, "n": r["n"], "cap": x["cap"], "ind": r["ind"], "fin": x["fin"], "hz": r["hz"],
+                   "c0": r["c"], "fv": r["fv"], "up": r["up"], "bb": r["bb"], "tgt": r["tgt"], "tgt_pct": r["tgt_pct"],
+                   "stop_pct": r["stop_pct"], "days": R["long_days"] if r["hz"] == "L" else R["medium_days"],
+                   "sc": r["sc"], "why": r, "st": "new", "ld": asof, "last": r["c"], "ikey": ikey,
+                   "i0": index_on(asof, ikey), "idx": None, "fv_now": r["fv"]}
+            picks.append(new)
+            real.append(new)
+            open_now.append(new)
+            due = plus_days(asof, R["every_days"])
+    if ready and not note:
+        if len(open_now) >= R["max_positions"]:
+            note = f"All {R['max_positions']} slots are in use, so no new pick is made until one closes."
+        elif not any(allowed(s) for s in buyable) and asof >= due:
+            note = "No stock clears every check tonight. Holding cash is part of the plan; the screen looks again every night."
+        elif asof >= due and doc.get("d") != asof:
+            note = ("The fundamentals and the prices are from different days, so no new pick is named from them. "
+                    "The next nightly run looks again.")
+    jsave(DATA / "research.json", {"picks": sorted(picks, key=lambda p: p["d"])})
+
+    done = [p for p in real if p.get("done")]
+    live = [p for p in real if p["st"] == "open"]
+    hits = [p for p in done if p["st"] == "target"]
+    stats = {
+        "n": len(real), "open": len(live), "new": sum(1 for p in real if p["st"] == "new"), "closed": len(done),
+        "target": len(hits), "stopped": sum(1 for p in done if p["st"] == "stopped"),
+        "broken": sum(1 for p in done if p["st"] in ("broken", "revalued")), "timeup": sum(1 for p in done if p["st"] == "timeup"),
+        "lapsed": len(picks) - len(real),
+        "hit": rnd(len(hits) / len(done) * 100, 1) if done else None,
+        "avg": rnd(avg([p["ret"] for p in done])), "open_avg": rnd(avg([p["ret"] for p in live])),
+        "vs": rnd(avg([p["ret"] - p["idx"] for p in done if p.get("idx") is not None and p.get("ret") is not None])),
+    }
+    waiting = sorted((s for s in good if not cards[s]["all"]), key=lambda s: -(cards[s]["a"]["up"] or -999))
+    block = {
+        "rules": R, "min": RESEARCH_MIN, "hold": RESEARCH_HOLD, "long": LONG_TERM, "pe_cap": PE_CAP,
+        "fv_cut": FV_CUT, "repick_days": REPICK_DAYS, "long_growth": LONG_GROWTH,
+        "parts": [[k, w, label] for k, w, label in RESEARCH_PARTS],
+        "fund_d": doc.get("d"), "ready": ready, "note": note, "due": due, "slot": slot,
+        "universe": "Nifty 500" if meta.get("nifty500") else "Nifty 100", "funnel": funnel,
+        "buy": [row(s) for s in buyable[:10]], "watch": [row(s) for s in waiting[:15]],
+        "picks": sorted(picks, key=lambda p: p["d"], reverse=True), "stats": stats,
+    }
+    # A stock's own page: the full valuation if it passes the quality checks, otherwise which checks it fails.
+    # A fair value for a business that fails them would rest on numbers the screen itself doesn't trust.
+    own = {s: ({"ok": 1, **row(s)} if cards[s]["quality"] else
+               {"ok": 0, "fin": int(cards[s]["fin"]), "fails": [k for k, ok in cards[s]["q"] if not ok]}) for s in cards}
+    return block, own
+
+
+def build(make_picks=False):
+    """Rebuild docs/data.json from the stored history. New picks are named only on the nightly update,
+    never by a rebuild done by hand."""
     meta = jload(DATA / "meta.json", {})
     cfg = load_config()
     names = meta.get("names", {})
@@ -1150,7 +1818,8 @@ def build():
     adj = {}
     for sym in sorted({s for d in days for s in eq[d]}):
         adj[sym] = adjusted_rows([(d, eq[d][sym]) for d in days if sym in eq[d]])
-    picks, tonight = build_picks(adj, days, idx, meta, cfg, names, asof)
+    picks, tonight = build_picks(adj, days, idx, meta, cfg, names, asof, make_picks)
+    research, own = build_research(days, adj, idx, meta, cfg, names, asof, make_picks)
 
     stocks = []
     for sym in universe:
@@ -1160,6 +1829,7 @@ def build():
         st = stock_metrics(sym, rows, fo, deals, det_days, names, cfg["notes"])
         st["grp"] = 50 if sym in n50 else 100 if sym in n100 else 0  # Nifty 50, Next 50, or added by hand
         st["pk"] = tonight.get(sym)
+        st["rs"] = own.get(sym)
         stocks.append(st)
 
     out = {
@@ -1172,8 +1842,9 @@ def build():
         "fii": fii_activity(days, flows, part, fo, asof),
         "stocks": stocks,
         "picks": picks,
+        "research": research,
         "universe": "Nifty 100" if len(n100) >= 90 else "Nifty 50",
-        "deals": [x for x in deals if x["d"] >= det_days[0]][-80:],
+        "deals": [x for x in deals if x["d"] >= det_days[0] and x["s"] in set(universe)][-80:],
         "have": {"fo": asof in fo, "idx": asof in idx, "flows": asof in flows, "part": "FII" in part.get(asof, {})},
         "mtf": {"stop_buffer_pct": STOP_BUFFER * 100, "min_stop_pct": MIN_STOP_PCT},
         "extra": [s for s in cfg["extra_symbols"] if s not in n50 | n100],
@@ -1182,6 +1853,9 @@ def build():
     newest = next((x for x in picks["list"] if x["src"] == "live"), None)
     print(f"Built {OUT.relative_to(ROOT)}: {len(stocks)} stocks, data as of {asof}; "
           + (f"latest pick {newest['s']} ({newest['d']}), next due {picks['due']}" if newest else "no pick yet"))
+    f, held = research["funnel"], [p for p in research["picks"] if not p.get("done")]
+    print(f"Research: {f['quality']} of {f['universe']} pass the quality checks, {f['buy']} in the buy zone; "
+          + (f"holding {', '.join(p['s'] for p in held)}" if held else "no open research pick"))
 
 
 def main():

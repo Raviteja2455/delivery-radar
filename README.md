@@ -4,7 +4,8 @@ A phone-friendly page that shows, for every Nifty 100 stock, the day's delivery 
 averages, delivered and traded quantity, volume against its 20-day average, average trade size, futures open-interest
 buildup, bulk and block deals, and a six-signal accumulation score. A market band at the top sets the size of swing
 trades (green: half size; amber and red: full size; always in cash). A Picks tab names one three-month swing pick
-every ten days and tracks how every pick did.
+every ten days and tracks how every pick did. A Research tab screens the Nifty 500 for investments of six months to
+two years, bought only at a margin of safety below a fair value worked out four ways.
 
 It refreshes itself every weekday night from NSE's public end-of-day files, using GitHub's free scheduled jobs.
 
@@ -15,8 +16,8 @@ It refreshes itself every weekday night from NSE's public end-of-day files, usin
 2. **Add these files** to it, keeping the folders as they are (`radar.py`, `config.json`, `requirements.txt`,
    `docs/`, `.github/workflows/nightly.yml`, `tests/`).
 3. **Turn on the page.** In the repository, open Settings → Pages and set *Source* to **GitHub Actions**.
-4. **Run it once.** Open the Actions tab → *Nightly NSE update* → **Run workflow**. The first run fetches about nine
-   months of history and takes roughly ten minutes. If NSE stops answering part-way, the run keeps what arrived and
+4. **Run it once.** Open the Actions tab → *Nightly NSE update* → **Run workflow**. The first run fetches about ten
+   months of history for the Nifty 500 and takes roughly ten minutes. If NSE stops answering part-way, the run keeps what arrived and
    the next one carries on.
 5. **Open the app** at `https://<your-github-username>.github.io/delivery-radar/` and add it to your home screen.
 
@@ -173,7 +174,7 @@ from are deleted, and a picked stock keeps being downloaded even if it leaves th
 result against the Nifty 50 and status (open, target hit, stopped out, time up). It has two sets:
 
 - **Live picks**: what the nightly run actually published.
-- **Back-test**: the same rule replayed on the stored history (about nine months, growing to fourteen), on the same
+- **Back-test**: the same rule replayed on the stored history (about ten months, growing to two years), on the same
   ten-day grid counted back from the first live pick. It uses today's Nifty 100 list throughout, and nobody traded it.
 
 Each set shows a comparison line: every ranked stock bought on the same dates with the same exits. A large-cap stock
@@ -184,6 +185,104 @@ and the live record are its evidence.
 
 The Swing tab still runs only on the Nifty 50, the stocks plan v2 was tested on. Each stock's page shows its pick
 score and rank, and the Stocks tab can be sorted by it.
+
+## The Research tab (November 2026)
+
+A separate ₹1 lakh portfolio for holdings of six months to two years, run by a fixed rulebook. Every night the job
+screens the Nifty 500, values each quality stock, and names a pick only when one clears every check. Most nights it
+names nothing.
+
+**The mandate**
+
+| Item | Rule |
+|---|---|
+| Money | ₹1,00,000 in 5 equal slots of ₹20,000; cash delivery, no leverage. What isn't invested stays in cash |
+| Universe | Nifty 500. Large cap = Nifty 100, mid cap = Nifty Midcap 150, small cap = Nifty Smallcap 250 |
+| Spread | At most 2 stocks in one sector and 2 small caps |
+| Pace | At most one new pick every 14 days |
+| Horizon | 6–12 months, or 1–2 years for a compounder (return on equity 18%+, growth 12%+, debt under 0.5× equity, Piotroski 6+) |
+
+**Step 1: quality, all six checks**
+
+| Check | Non-financial company | Financial company |
+|---|---|---|
+| Return on equity | 15% or more | 13% or more |
+| Debt | No more than 1× equity (0.6× for small caps), interest covered 3× | Not applied |
+| Growth | Sales up 8% a year over five years; neither sales nor earnings shrinking now | Same |
+| Strength | Piotroski score 5 of 9 or more | 5 or more analysts following it (the screen can't read bad loans) |
+| Cash | Free cash flow positive; accruals under 25% of assets | Return on assets 1% or more |
+| Tradable | ₹5 crore a day; one share fits a slot | Same |
+
+**Step 2: fair value, four ways**
+
+| Method | How |
+|---|---|
+| Cash-flow value | Ten years of the earnings a shareholder could take out after paying for growth (payout = 1 − growth ÷ return on equity), growth fading to 5% for ever, long-run return on equity held to 18%. Discounted at 12.5% for large caps, 13.5% for mid caps, 15% for small caps: the 10-year government bond yield (about 7.3% in November 2026) plus a premium for owning shares |
+| Peter Lynch | Fair P/E = growth + dividend yield, between 8 and 35 |
+| Peers | Median P/E of the stock's closest peers (at least eight), 35 at most |
+| Analysts | Median 12-month target, brought back one year, when 5 or more cover the stock |
+
+Fair value is the **second-lowest** of the methods available (at least three), so all but one must put the stock at
+least that high. No method may count for more than twice the price. Two guards feed all of them:
+
+- **Growth assumed** is the lower of five-year sales and earnings growth, pulled down when the last year was slower,
+  15% at most (12% for a financial company, and no more than its retained profit can fund).
+- **Earnings used** are the last twelve months', but no more than last year's grown at that rate, and no more than
+  analysts expect next year. A boom year is never valued as if it were normal.
+
+**Step 3: price and timing**
+
+| Rule | Large | Mid | Small |
+|---|---|---|---|
+| Margin of safety: buy only this far below fair value | 20% | 25% | 30% |
+| Stop: sell on a close this far below the buy price | 15% | 18% | 22% |
+
+The close must also be above the 200-day average, analysts' target must not be below the price, and no results may
+be due within three days. The pick is the highest score in the buy zone (discount 35, quality 30, growth 20,
+timing 15). Buy at the next open, but only if it opens at or below the buy-below price; otherwise the pick lapses.
+
+**Step 4: selling, whichever comes first**
+
+| Exit | Rule |
+|---|---|
+| Target | A close at or above the target: today's fair value for a 6–12 month pick, fair value a year on (growth capped at 12%) for a 1–2 year pick. No target is set more than 60% above the price |
+| Stop | A close 15% / 18% / 22% below the buy price |
+| Business | Earnings turn negative, return on equity under 10%, debt over 1.5× equity, or Piotroski 3 or less |
+| Valuation | Fair value cut by 10% or more, down to the price or below |
+| Time | 12 months for a 6–12 month pick, 24 months for a 1–2 year pick |
+
+A stock sold at a loss is not picked again for 90 days.
+
+**Settings.** The numbers above are the `research` block in `config.json`. `research_skip` keeps a stock out by
+name, with the reason shown in the app:
+
+```json
+{
+  "research_skip": {"SOMESTOCK": "Promoters have pledged 40% of their shares (Sep 2026 filing)."}
+}
+```
+
+That list is where to record what a screen can't read: a promoter pledge, a governance question, a lender's bad loans.
+
+**Where the numbers come from.** Prices and delivery come from NSE. Fundamentals come from TradingView's screener in
+one request a night, saved as `data/fund.json`. It is not an official data service and can change without notice;
+when it doesn't answer, the previous snapshot is kept, and once that is more than a week old no pick is made. A
+stock whose screener price disagrees with NSE's close by more than 3% is left out that night. A new pick is made
+only when the fundamentals and the prices are from the same session.
+
+**What it can't do.**
+
+- It reads published numbers, not the business. It can't see promoter pledges, governance, order books, bad loans,
+  one-off gains, or anything announced since the last results.
+- It can't be replayed on the past, because no history of fundamentals is stored. Its record starts with its first pick.
+- By these rules most quality stocks in India are priced above fair value most of the time. The screen will hold
+  cash for long stretches, and what it finds cheap will often be lenders, commodity producers and out-of-favour
+  sectors.
+- Results count price only. Dividends and charges are left out. Gains on shares sold within 12 months are taxed at
+  20%; after 12 months at 12.5% on gains above ₹1.25 lakh a year.
+
+Each stock's own page shows its research view: the fair value and checklist if it passes the quality checks, or the
+checks it fails. `python tests/test_research.py` checks the arithmetic on made-up numbers.
 
 ## Adding stocks outside the Nifty 100
 
@@ -230,4 +329,5 @@ through a local web server (`python -m http.server -d docs`).
 `python radar.py update --source-dir sample --today 2026-10-23` runs the whole pipeline offline against them.
 
 Data source: NSE public archives (sec_bhavdata_full, F&O UDiFF bhavcopy, ind_close_all, bulk.csv, block.csv,
-fao_participant_oi) and the NSE provisional FII/DII figures. For information only; not investment advice.
+fao_participant_oi, index lists), the NSE provisional FII/DII figures, and TradingView's screener for fundamentals.
+For information only; not investment advice.

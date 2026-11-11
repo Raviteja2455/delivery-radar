@@ -1,6 +1,11 @@
 {
   "extra_symbols": [],
   "pick": {"every_days": 10, "target_pct": 5, "window_days": 91, "stop_pct": 8},
+  "research": {"pot": 100000, "max_positions": 5, "every_days": 14, "max_sector": 2, "max_small": 2,
+               "discount_large": 20, "discount_mid": 25, "discount_small": 30,
+               "stop_large": 15, "stop_mid": 18, "stop_small": 22,
+               "coe_large": 12.5, "coe_mid": 13.5, "coe_small": 15},
+  "research_skip": {},
   "notes": {
     "HDFCBANK": {"bias": 1, "as_of": "2026-09-30", "text": "Mutual fund stake rose to 31.9% from 26.0% a year earlier while FPIs cut theirs to 39.4% from 48.4%."},
     "ICICIBANK": {"bias": 1, "as_of": "2026-09-30", "text": "Among mutual funds' five most-bought stocks in September 2026."},
