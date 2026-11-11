@@ -11,6 +11,10 @@ provisional FII/DII figures. History is kept as one small JSON file per trading 
 
 Every night the script also ranks all Nifty 100 stocks for a three-month swing pick, names one
 pick every ten days and tracks how each pick did; the pick log is data/picks.json.
+
+It also runs a research screen over the Nifty 500 (large, mid and small caps) for 6-month to
+2-year investments: quality checks, a fair value from four methods, and a buy only at a discount
+to it. Fundamentals come from TradingView's screener; the research log is data/research.json.
 """
 from __future__ import annotations
 
@@ -41,6 +45,10 @@ URLS = {
     "n100": "https://nsearchives.nseindia.com/content/indices/ind_nifty100list.csv",
     "nn50": "https://nsearchives.nseindia.com/content/indices/ind_niftynext50list.csv",
     "n100_alt": "https://www.niftyindices.com/IndexConstituent/ind_nifty100list.csv",
+    "n500": "https://nsearchives.nseindia.com/content/indices/ind_nifty500list.csv",
+    "mid150": "https://nsearchives.nseindia.com/content/indices/ind_niftymidcap150list.csv",
+    "small250": "https://nsearchives.nseindia.com/content/indices/ind_niftysmallcap250list.csv",
+    "tv": "https://scanner.tradingview.com/india/scan",
     "bulk": "https://nsearchives.nseindia.com/content/equities/bulk.csv",
     "block": "https://nsearchives.nseindia.com/content/equities/block.csv",
     "fiidii": "https://www.nseindia.com/api/fiidiiTradeReact",
@@ -48,7 +56,7 @@ URLS = {
 }
 # Delivery history runs about nine months: the pick rule needs three months to warm up, and the
 # replay of past picks needs three more for each pick's result to be final.
-LOOKBACK = {"eq": 280, "fo": 45, "idx": 300, "part": 45}    # calendar days kept filled (first run backfills this)
+LOOKBACK = {"eq": 300, "fo": 45, "idx": 300, "part": 45}    # calendar days kept filled (first run backfills this)
 KEEP_DAYS = {"eq": 420, "fo": 90, "idx": 420, "part": 200}  # day files older than this are deleted
 DEALS_KEEP = 200   # calendar days of bulk and block deals kept
 RECENT_DAYS = 5    # a failed download this recent stops the run; an older one only pauses the backfill
@@ -67,6 +75,33 @@ HEADERS = {
     "Accept-Language": "en-IN,en;q=0.9",
     "Referer": "https://www.nseindia.com/",
 }
+# Fundamentals asked of TradingView's screener for the research screen: one request for the whole
+# Nifty 500. A column the server does not know is dropped and the request repeated, so a renamed
+# field costs that one reading instead of the whole screen.
+TV_COLS = (
+    "close", "currency", "fundamental_currency_code", "market_cap_basic", "sector", "industry",
+    "earnings_per_share_diluted_ttm", "earnings_per_share_basic_ttm", "price_earnings_ttm",
+    "book_value_per_share_fq", "book_value_per_share_fy", "price_book_fq",
+    "return_on_equity", "return_on_equity_fy", "return_on_assets", "return_on_assets_fy",
+    "return_on_invested_capital", "return_on_invested_capital_fy",
+    "debt_to_equity", "debt_to_equity_fy", "interst_cover_ttm", "interst_cover_fy", "net_debt_to_ebitda_fy",
+    "total_revenue_yoy_growth_ttm", "total_revenue_yoy_growth_fy", "total_revenue_cagr_5y",
+    "earnings_per_share_diluted_yoy_growth_ttm", "earnings_per_share_diluted_yoy_growth_fy",
+    "earnings_per_share_basic_cagr_5y", "net_income_cagr_5y", "net_income_yoy_growth_ttm",
+    "sustainable_growth_rate_ttm", "sustainable_growth_rate_fy",
+    "net_income_ttm", "net_income_fy", "free_cash_flow_ttm", "free_cash_flow_fy",
+    "cash_f_operating_activities_ttm", "cash_f_operating_activities_fy",
+    "operating_margin_ttm", "net_margin_ttm",
+    "dividends_yield_current", "dividend_payout_ratio_ttm", "dividend_payout_ratio_fy",
+    "piotroski_f_score_ttm", "piotroski_f_score_fy", "altman_z_score_ttm", "altman_z_score_fy",
+    "price_target_average", "price_target_median", "price_target_high", "price_target_low",
+    "recommendation_total", "recommendation_mark", "earnings_per_share_forecast_next_fy",
+    "SMA50", "SMA200", "price_52_week_high", "price_52_week_low", "Perf.3M", "Perf.6M", "Perf.Y",
+    "average_volume_30d_calc", "float_shares_percent_current",
+    "earnings_release_date", "earnings_release_next_date", "fiscal_period_end_current",
+)
+TV_CHUNK = 250
+
 # sec_bhavdata_full columns kept, in this order, per stock per day
 EQ_FIELDS = ("PREV_CLOSE", "OPEN_PRICE", "HIGH_PRICE", "LOW_PRICE", "CLOSE_PRICE",
              "TTL_TRD_QNTY", "TURNOVER_LACS", "NO_OF_TRADES", "DELIV_QTY", "DELIV_PER")
@@ -216,6 +251,39 @@ class Source:
                 time.sleep(3 * (attempt + 1))
         raise RuntimeError(f"NSE request kept failing: {url} ({err})")
 
+    def post_json(self, url, payload):
+        """POST a JSON query (TradingView's screener). Returns (HTTP status, parsed body or None)."""
+        if self.folder:
+            # Offline: tv_scan.json holds {"unknown": [columns to refuse], "rows": {ticker: {column: value}}}.
+            doc = jload(self.folder / "tv_scan.json", None)
+            if doc is None:
+                return 404, None
+            bad = [c for c in payload["columns"] if c in doc.get("unknown", [])]
+            if bad:
+                return 400, {"error": f'Unknown field "{bad[0]}"', "data": None}
+            data = [{"s": t, "d": [doc["rows"][t].get(c) for c in payload["columns"]]}
+                    for t in payload["symbols"]["tickers"] if t in doc["rows"]]
+            return 200, {"totalCount": len(data), "data": data}
+        import requests
+        err = None
+        for attempt in range(3):
+            try:
+                r = requests.post(url, data=json.dumps(payload), timeout=40, headers={
+                    "User-Agent": HEADERS["User-Agent"], "Content-Type": "text/plain;charset=UTF-8",
+                    "Origin": "https://in.tradingview.com", "Referer": "https://in.tradingview.com/"})
+                time.sleep(PAUSE)
+                try:
+                    body = r.json()
+                except ValueError:
+                    body = None
+                if r.status_code in (200, 400):
+                    return r.status_code, body
+                err = f"HTTP {r.status_code}"
+            except Exception as e:
+                err = e
+            time.sleep(3 * (attempt + 1))
+        raise RuntimeError(f"screener request kept failing: {url} ({err})")
+
 
 # ----------------------------------------------------------------------------- parsers
 def parse_n50(text):
@@ -293,7 +361,7 @@ def parse_part(text):
 
 
 def parse_idx(text):
-    names = {"nifty 50": "nifty", "india vix": "vix", "nifty bank": "bank"}
+    names = {"nifty 50": "nifty", "india vix": "vix", "nifty bank": "bank", "nifty 500": "n500"}
     day, out = None, {}
     for r in csv_rows(text):
         key = names.get((r.get("Index Name") or "").strip().lower())
@@ -375,6 +443,83 @@ def fetch_n100(src, n50):
     return rows if good(rows) else []
 
 
+def fetch_n500(src, meta, names):
+    """The research universe: the Nifty 500, each stock tagged large (Nifty 100), mid (Nifty Midcap 150)
+    or small (Nifty Smallcap 250). Keeps the saved list when NSE does not answer."""
+    def read(key):
+        try:
+            text = src.get(URLS[key])
+        except RuntimeError as e:
+            print(f"{key} list unavailable: {e}")
+            return []
+        return parse_n50(text) if text else []
+
+    rows = read("n500")
+    if not 450 <= len({x["s"] for x in rows}) <= 520:
+        print("NSE did not send the Nifty 500 list; " + ("using the list saved earlier." if meta.get("nifty500")
+              else "the research screen covers the Nifty 100 only."))
+        return
+    mid, small = {x["s"] for x in read("mid150")}, {x["s"] for x in read("small250")}
+    large = set(meta.get("nifty100", []))
+    cap = {}
+    for x in rows:
+        s = x["s"]
+        names.setdefault(s, {"n": x["n"], "ind": x["ind"]})
+        cap[s] = "L" if s in large else "M" if s in mid else "S" if s in small else None
+    meta["nifty500"] = [x["s"] for x in rows]
+    meta["cap"] = cap  # None where the mid and small lists did not arrive; market value decides those
+
+
+def tv_ticker(sym):
+    return "NSE:" + re.sub(r"[^A-Z0-9]", "_", sym.upper())
+
+
+def fetch_fundamentals(src, symbols, today):
+    """One fundamentals snapshot for `symbols` from TradingView's screener, saved as data/fund.json.
+
+    Keeps the previous snapshot when the screener does not answer; the app then shows its date."""
+    back = {tv_ticker(s): s for s in symbols}
+    tickers = sorted(back)
+    cols, dropped, rows = list(TV_COLS), [], {}
+    try:
+        for _ in range(len(TV_COLS)):  # each pass either completes or drops one column the screener refuses
+            rows, unknown = {}, None
+            for k in range(0, len(tickers), TV_CHUNK):
+                query = {"symbols": {"tickers": tickers[k:k + TV_CHUNK], "query": {"types": []}}, "columns": cols}
+                status, body = src.post_json(URLS["tv"], query)
+                if status == 200 and body and isinstance(body.get("data"), list):
+                    for x in body["data"]:
+                        if x.get("s") in back and isinstance(x.get("d"), list) and len(x["d"]) == len(cols):
+                            rows[back[x["s"]]] = x["d"]
+                    continue
+                m = re.search(r'Unknown field "([^"]+)"', str((body or {}).get("error", "")))
+                if status == 400 and m and m.group(1) in cols and len(cols) > 10:
+                    unknown = m.group(1)
+                    break
+                raise RuntimeError(f"unexpected screener answer (HTTP {status}): {str(body)[:200]}")
+            if unknown is None:
+                break
+            cols.remove(unknown)
+            dropped.append(unknown)
+    except RuntimeError as e:
+        print(f"Fundamentals unavailable tonight: {e}")
+        return
+    save_fundamentals(rows, cols, dropped, symbols, today)
+
+
+def save_fundamentals(rows, cols, dropped, symbols, today):
+    if len(rows) < 0.5 * len(symbols):
+        print(f"Fundamentals: only {len(rows)} of {len(symbols)} stocks answered, so the earlier snapshot is kept.")
+        return
+    if dropped:
+        print(f"Fundamentals: the screener no longer has {', '.join(dropped)}")
+    missing = sorted(set(symbols) - set(rows))
+    if missing:
+        print(f"Fundamentals: no row for {len(missing)} stocks: {', '.join(missing[:25])}{' …' if len(missing) > 25 else ''}")
+    jsave(DATA / "fund.json", {"d": today.isoformat(), "cols": cols, "rows": rows})
+    print(f"Fundamentals: {len(rows)} of {len(symbols)} stocks, {len(cols)} readings each")
+
+
 def tracked_symbols(doc, today, rules):
     """Symbols of live picks still inside their three-month window."""
     cut = (today - timedelta(days=rules["window_days"] + 30)).isoformat()
@@ -414,11 +559,15 @@ def update(src, today=None):
         print("NSE did not send the Nifty 100 list today; using the list saved earlier.")
     else:
         print("NSE did not send the Nifty 100 list; tonight covers the Nifty 50 only and no pick is made.")
+    fetch_n500(src, meta, names)
     meta["names"] = names
     # Stocks with a live pick stay in the downloads even if they leave the index, so the pick can be tracked.
     tracked = tracked_symbols(jload(DATA / "picks.json", {}), today, cfg["pick"])
-    universe = sorted(set(meta["nifty50"]) | set(meta.get("nifty100", [])) | set(cfg["extra_symbols"]) | tracked)
+    tracked |= {p["s"] for p in jload(DATA / "research.json", {}).get("picks", []) if p.get("s") and not p.get("done")}
+    research = set(meta.get("nifty500", [])) or set(meta.get("nifty100", []))
+    universe = sorted(set(meta["nifty50"]) | set(meta.get("nifty100", [])) | research | set(cfg["extra_symbols"]) | tracked)
     uset = set(universe)
+    fetch_fundamentals(src, sorted(research | tracked), today)
 
     missing = {k: set(v) for k, v in meta.get("missing", {}).items()}
     for k in ("eq", "fo", "idx", "part"):
