@@ -68,8 +68,25 @@ NEXT50 = {  # Nifty Next 50 names, to exercise the Nifty 100 list and the three-
     "CUMMINSIND": ("Cummins India Ltd.", "Capital Goods", 4000), "INDHOTEL": ("The Indian Hotels Company Ltd.", "Consumer Services", 740),
     "MAZDOCK": ("Mazagon Dock Shipbuilders Ltd.", "Capital Goods", 2800), "ENRIN": ("Siemens Energy India Ltd.", "Capital Goods", 3300),
 }
+MIDCAPS = {  # a few Nifty Midcap 150 and Smallcap 250 names, to exercise the research screen's cap classes
+    "POLYCAB": ("Polycab India Ltd.", "Capital Goods", 7200), "PERSISTENT": ("Persistent Systems Ltd.", "Information Technology", 5600),
+    "COFORGE": ("Coforge Ltd.", "Information Technology", 1700), "DIXON": ("Dixon Technologies (India) Ltd.", "Consumer Durables", 15000),
+    "FEDERALBNK": ("The Federal Bank Ltd.", "Financial Services", 210), "MUTHOOTFIN": ("Muthoot Finance Ltd.", "Financial Services", 2900),
+    "PIIND": ("PI Industries Ltd.", "Chemicals", 3700), "SUPREMEIND": ("Supreme Industries Ltd.", "Capital Goods", 4200),
+    "ASTRAL": ("Astral Ltd.", "Capital Goods", 1400), "PAGEIND": ("Page Industries Ltd.", "Textiles", 44000),
+}
+SMALLCAPS = {
+    "CDSL": ("Central Depository Services (India) Ltd.", "Financial Services", 1500), "RADICO": ("Radico Khaitan Ltd.", "Fast Moving Consumer Goods", 2900),
+    "AMBER": ("Amber Enterprises India Ltd.", "Consumer Durables", 7600), "CAMS": ("Computer Age Management Services Ltd.", "Financial Services", 3900),
+    "KARURVYSYA": ("Karur Vysya Bank Ltd.", "Financial Services", 250), "NATCOPHARM": ("Natco Pharma Ltd.", "Healthcare", 850),
+    "ZENSARTECH": ("Zensar Technologies Ltd.", "Information Technology", 780), "CYIENT": ("Cyient Ltd.", "Information Technology", 1200),
+    "TRIVENI": ("Triveni Engineering & Industries Ltd.", "Fast Moving Consumer Goods", 360), "ARE&M": ("Amara Raja Energy & Mobility Ltd.", "Automobile and Auto Components", 1000),
+}
 NIFTY50 = list(SYMBOLS)
 SYMBOLS.update(NEXT50)
+NIFTY100 = list(SYMBOLS)
+SYMBOLS.update(MIDCAPS)
+SYMBOLS.update(SMALLCAPS)
 HOLIDAYS = {date(2026, 1, 26), date(2026, 10, 2), date(2026, 10, 20)}
 # NSE answers some holiday addresses with the previous session's file instead of "not found";
 # these holidays reproduce that, so the pipeline must notice the date inside the file.
@@ -96,7 +113,14 @@ def main(out, last):
         w.writerow(["Company Name", "Industry", "Symbol", "Series", "ISIN Code"])
         for s in NIFTY50:
             w.writerow([SYMBOLS[s][0], SYMBOLS[s][1], s, "EQ", "INE000000000"])
-    with open(out / "ind_nifty100list.csv", "w", newline="") as f:
+    for fname, members in (("ind_nifty100list.csv", NIFTY100), ("ind_niftymidcap150list.csv", list(MIDCAPS)),
+                           ("ind_niftysmallcap250list.csv", list(SMALLCAPS))):
+        with open(out / fname, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["Company Name", "Industry", "Symbol", "Series", "ISIN Code"])
+            for s in members:
+                w.writerow([SYMBOLS[s][0], SYMBOLS[s][1], s, "EQ", "INE000000000"])
+    with open(out / "ind_nifty500list.csv", "w", newline="") as f:  # a short stand-in for the 500 names
         w = csv.writer(f)
         w.writerow(["Company Name", "Industry", "Symbol", "Series", "ISIN Code"])
         for s, (n, ind, _) in SYMBOLS.items():
@@ -213,6 +237,39 @@ def main(out, last):
                 total = [a + b for a, b in zip(total, cells)]
                 f.write(",".join([k] + [str(c) for c in cells] + [str(fl + sl + cl + pl), str(fs + ss + cs + ps)]) + "\r\n")
             f.write(",".join(["TOTAL"] + [str(c) for c in total] + ["0", "0"]) + "\r\n")
+
+    # TradingView screener answer, in the offline form radar.py's Source reads: fundamentals that are
+    # consistent with the last price, with about one stock in six made cheap and strong on purpose.
+    frnd = random.Random(11)
+    tv = {"unknown": ["price_target_median"], "rows": {}}
+    for s in SYMBOLS:
+        gem = frnd.random() < 0.17
+        fin = SYMBOLS[s][1] == "Financial Services"
+        c = round(price[s], 2)
+        pe = frnd.uniform(8, 14) if gem else frnd.uniform(14, 70)
+        roe = frnd.uniform(18, 30) if gem else frnd.uniform(4, 32)
+        g5 = frnd.uniform(12, 22) if gem else frnd.uniform(-2, 24)
+        eps = c / pe
+        ni = eps * frnd.uniform(2e7, 4e8)
+        row = {
+            "close": c, "currency": "INR", "fundamental_currency_code": "INR", "market_cap_basic": c * frnd.uniform(5e7, 5e9),
+            "sector": "Finance" if fin else "Producer Manufacturing", "industry": SYMBOLS[s][1],
+            "earnings_per_share_diluted_ttm": eps if frnd.random() > 0.03 else -eps, "price_earnings_ttm": pe,
+            "book_value_per_share_fq": eps / (roe / 100), "return_on_equity": roe,
+            "return_on_assets": frnd.uniform(0.6, 2.5) if fin else roe * 0.6,
+            "debt_to_equity": frnd.uniform(3, 8) if fin else frnd.uniform(0, 0.5 if gem else 1.6),
+            "interst_cover_ttm": None if fin else frnd.uniform(1.5, 40),
+            "total_revenue_yoy_growth_ttm": g5 + frnd.uniform(-6, 6) + (4 if gem else 0), "total_revenue_cagr_5y": g5,
+            "earnings_per_share_diluted_yoy_growth_ttm": g5 + frnd.uniform(-15, 20) + (12 if gem else 0),
+            "earnings_per_share_basic_cagr_5y": g5 + frnd.uniform(-4, 8),
+            "net_income_ttm": ni, "free_cash_flow_ttm": None if fin else ni * frnd.uniform(-0.3 if not gem else 0.4, 1.2),
+            "cash_f_operating_activities_ttm": ni * frnd.uniform(0.2, 1.4),
+            "dividends_yield_current": frnd.uniform(0, 3), "piotroski_f_score_ttm": frnd.randint(7, 9) if gem else frnd.randint(2, 9),
+            "price_target_average": c * frnd.uniform(1.15 if gem else 0.9, 1.45), "recommendation_total": frnd.randint(0, 40),
+            "SMA200": c * (frnd.uniform(0.85, 0.99) if gem else frnd.uniform(0.85, 1.15)), "Perf.6M": frnd.uniform(-20, 35),
+        }
+        tv["rows"]["NSE:" + "".join(ch if ch.isalnum() else "_" for ch in s)] = row
+    (out / "tv_scan.json").write_text(json.dumps(tv))
 
     d = days[-1]
     head = ["Date", "Symbol", "Security Name", "Client Name", "Buy/Sell", "Quantity Traded", "Trade Price / Wght. Avg. Price", "Remarks"]
