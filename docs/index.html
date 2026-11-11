@@ -316,7 +316,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         <p>The live strip shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR, with MCX gold (₹ per 10 g) and silver (₹ per kg) below, refreshed every 20 seconds while the app is open. A green dot means that market is trading now. GIFT Nifty, USD/INR and MCX are real time; crude runs 10 minutes behind. Each uses its most-traded contract, named after the label. When MCX trading moves to the next month ahead of expiry, the label changes month and the price shifts by the gap between the two contracts. Outside NSE hours the line under the strip compares GIFT Nifty with the close of the Nifty futures for the same month, which is the usual read on how the next session will open.</p>
         <p>The band at the top sets the size of swing trades. All of them are in cash, with no MTF. Green (an uptrend) means half size, because breakouts taken in green markets did worst in the 2020–26 backtests; amber and red mean full size. The Swing tab runs the full entry, sizing and exit rules on every stock and explains the evidence under <i>The rules this tab applies</i>.</p>
         <p>The Picks tab ranks every Nifty 100 stock each night and names one three-month swing pick every ten days, aiming for at least +5%. It then tracks every pick, and a replay of the same rule on past data, so you can see how often the target was reached. The Swing tab stays on the Nifty 50, the stocks its plan was tested on.</p>
-        <p>The Research tab screens the Nifty 500 (large, mid and small caps) for investments of six months to two years. It keeps only profitable, well-financed, growing companies, works out a fair value four ways, and names a stock only when the price is well below it and no longer falling. It puts ₹1 lakh into one stock at a time and follows every pick to its exit. Most nights it names nothing: waiting for price is part of the method.</p>
+        <p>The Research tab screens the Nifty 500 (large, mid and small caps) for investments of six months to two years. It keeps only profitable, well-financed, growing companies, works out a fair value four ways, and names a stock only when the price is well below it and no longer falling. It names every stock that qualifies, each sized at ₹1 lakh, and follows every pick to its exit; which ones you take depends on your budget. Most nights it names nothing: waiting for price is part of the method.</p>
         <p>FII activity, inside the band, shows each session's net cash buying or selling by foreign investors (NSE's provisional figure) and how their index futures, calls and puts changed, from NSE's participant-wise open interest. A positive futures or calls number, or a negative puts number, is the bullish side. The verdict under the table weighs the latest day's cash, futures and options: when they all agree it says bullish or bearish, otherwise it leans with the majority. On Nifty's weekly expiry (marked *), option changes include contracts that simply expired. The tile beside VIX shows how much of FIIs' index-futures position is long.</p>
       </div>
     </details>
@@ -1405,14 +1405,27 @@ td.hi { color: var(--deliv); font-weight: 600; }
     const invested = open.reduce((a, p) => a + cost(p), 0);
     const gain = open.reduce((a, p) => a + cost(p) * (p.ret || 0) / 100, 0);
     const booked = closed.reduce((a, p) => a + cost(p) * (p.ret || 0) / 100, 0);
-    const pot = R.rules.pot, total = gain + booked, one = R.rules.max_positions === 1;
+    const any = !R.rules.max_positions, one = R.rules.max_positions === 1;   // no limit on open picks, or one at a time
+    const pot = R.slot * (R.rules.max_positions || 1), total = gain + booked;
     const fd = R.fund_d ? shortDate(R.fund_d) : null;
     const why = [
-      one ? `${rupeesShort(pot)} goes into one stock at a time. Until a stock clears every check, it stays in cash.`
+      any ? `Every stock that clears every check is named that night, each sized at ${rupeesShort(R.slot)}. Take them as your budget allows.`
+      : one ? `${rupeesShort(pot)} goes into one stock at a time. Until a stock clears every check, it stays in cash.`
           : `${rupeesShort(pot)} in ${R.rules.max_positions} equal parts of ${rupees(R.slot, 0)}. What isn't invested stays in cash.`,
       fd ? `Fundamentals as of ${fd}, for ${R.funnel.data} of ${R.funnel.universe} ${R.universe} stocks.` : "No fundamentals have arrived yet.",
-      R.note || (R.due > DATA.asof && open.length < R.rules.max_positions ? `Next pick: the first night on or after ${longDate(R.due)} that a stock clears every check.` : null),
+      R.note || (R.due > DATA.asof && (any || open.length < R.rules.max_positions) ? `Next pick: the first night on or after ${longDate(R.due)} that a stock clears every check.` : null),
     ].filter(Boolean);
+    if (any) {  // each pick stands alone, so show the picks, not a pot
+      const held = open.filter((p) => p.st === "open");
+      return h("section", { class: "regime", "data-r": R.ready ? (open.length ? "green" : "amber") : "red" },
+        h("p", { class: "verdict" }, h("b", { text: open.length ? String(open.length) : "No" }), ` research pick${open.length === 1 ? "" : "s"} open`),
+        h("ul", { class: "why" }, why.map((t) => h("li", { text: t }))),
+        h("div", { class: "figs" },
+          fig("Open picks", String(open.length), null, open.length ? `${rupeesShort(invested)} to hold all` : "none yet"),
+          fig("Open gain", held.length ? signed(R.stats.open_avg, 1) : "–", null, held.length ? `${rupees(gain, 0)} on all` : "nothing held"),
+          fig("Closed", String(closed.length), null, closed.length ? `${R.stats.target} at target` : "none yet"),
+          fig("Avg result", closed.length ? signed(R.stats.avg, 1) : "–", null, closed.length ? `${rupees(booked, 0)} on all` : "closed picks")));
+    }
     return h("section", { class: "regime", "data-r": R.ready ? (open.length ? "green" : "amber") : "red" },
       one ? h("p", { class: "verdict" }, h("b", { text: open.length ? open[0].s : "In cash" }), open.length ? " is the research holding" : ": no research pick open")
           : h("p", { class: "verdict" }, h("b", { text: `${open.length} of ${R.rules.max_positions}` }), " research positions in use"),
@@ -1473,11 +1486,14 @@ td.hi { color: var(--deliv); font-weight: 600; }
     return card;
   }
   function researchRules(R) {
-    const r = R.rules, m = R.min, hd = R.hold, lt = R.long;
+    const r = R.rules, m = R.min, hd = R.hold, lt = R.long, pot = R.slot * (r.max_positions || 1);
+    const scoring = "The score weighs the discount to fair value (35), quality (30), growth (20) and timing (15).";
     const items = [
-      r.max_positions === 1
-        ? `Mandate. ${rupeesShort(r.pot)} for one holding of six months to two years, beside your index fund and long-term shares, not instead of them. Cash delivery only, no leverage. The whole amount goes into one stock at a time, and no second pick is named until it is sold. Until a stock clears every check, the money stays in cash. With everything in one stock, a stop costs about ${rupees(r.pot * r.stop_large / 100, 0)} on a large cap, ${rupees(r.pot * r.stop_mid / 100, 0)} on a mid cap and ${rupees(r.pot * r.stop_small / 100, 0)} on a small cap.`
-        : `Mandate. A separate ${rupeesShort(r.pot)} portfolio for holdings of six months to two years, beside your index fund and long-term shares, not instead of them. Cash delivery only, no leverage. At most ${r.max_positions} stocks of ${rupees(R.slot, 0)} each, no more than ${r.max_sector} in one sector and ${r.max_small} small caps. Cash is a position: nothing is bought just to be invested.`,
+      !r.max_positions
+        ? `Mandate. Research picks for holdings of six months to two years, beside your index fund and long-term shares, not instead of them. Cash delivery only, no leverage. Every stock that clears every check is named on the night it qualifies, each sized at ${rupees(R.slot, 0)}. There is no limit on how many are open: take them as your budget allows, best score first. A stop on one pick costs about ${rupees(R.slot * r.stop_large / 100, 0)} on a large cap, ${rupees(R.slot * r.stop_mid / 100, 0)} on a mid cap and ${rupees(R.slot * r.stop_small / 100, 0)} on a small cap. Picks in one sector tend to fall together, so look at the sector before adding a second from it.`
+        : r.max_positions === 1
+        ? `Mandate. ${rupeesShort(pot)} for one holding of six months to two years, beside your index fund and long-term shares, not instead of them. Cash delivery only, no leverage. The whole amount goes into one stock at a time, and no second pick is named until it is sold. Until a stock clears every check, the money stays in cash. With everything in one stock, a stop costs about ${rupees(pot * r.stop_large / 100, 0)} on a large cap, ${rupees(pot * r.stop_mid / 100, 0)} on a mid cap and ${rupees(pot * r.stop_small / 100, 0)} on a small cap.`
+        : `Mandate. A separate ${rupeesShort(pot)} portfolio for holdings of six months to two years, beside your index fund and long-term shares, not instead of them. Cash delivery only, no leverage. At most ${r.max_positions} stocks of ${rupees(R.slot, 0)} each, no more than ${r.max_sector} in one sector and ${r.max_small} small caps. Cash is a position: nothing is bought just to be invested.`,
       `Universe. The ${R.universe}: large caps are the Nifty 100, mid caps the Nifty Midcap 150, small caps the Nifty Smallcap 250. A stock must trade ₹${plain(m.turnover_cr)} cr a day and one share must cost no more than the position.`,
       `Quality first, all six. (1) Return on equity ${plain(m.roe)}% or more, ${plain(m.roe_fin)}% for financial companies. (2) Debt no more than ${plain(m.de)}× equity (${plain(m.de_small)}× for small caps) with interest covered ${plain(m.icov)}×. (3) Sales growing ${plain(m.growth)}% a year over five years, and neither sales nor earnings shrinking now. (4) A Piotroski strength score of ${m.pio} of 9 or more; a financial company must instead be followed by ${m.analysts} or more analysts, because the screen can't read bad loans. (5) Profit that turns into free cash, with accruals under ${plain(m.sloan)}% of assets; for financial companies, return on assets of 1% or more. (6) Enough turnover.`,
       "Never value a boom year. Earnings used are the last twelve months', but no more than last year's grown at the long-run rate, and no more than analysts expect next year. Return on equity is cut by the same amount. This keeps refiners, metal makers and lenders at the top of their cycle from looking cheap.",
@@ -1486,7 +1502,9 @@ td.hi { color: var(--deliv); font-weight: 600; }
       `Margin of safety. Buy only ${plain(r.discount_large)}% or more below fair value for a large cap, ${plain(r.discount_mid)}% for a mid cap, ${plain(r.discount_small)}% for a small cap. Each stock's "buy below" price is that line.`,
       `Timing. The close must be above the 200-day average; analysts' target, where there is one, must not be below the price; and no results may be due within ${m.results_gap} days. A cheap stock that is still falling stays on the waiting list.`,
       `Horizon and target. A compounder (return on equity ${plain(lt.roe)}%+, growth ${plain(lt.growth)}%+, debt under ${plain(lt.de)}× equity, Piotroski ${lt.pio}+) is a 1–2 year pick whose target is fair value a year on, grown at ${plain(R.long_growth)}% at most. Every other pick is a 6–12 month pick whose target is today's fair value. No target is set more than ${plain(r.target_cap)}% above the price.`,
-      `One pick at a time. At most one new pick every ${r.every_days} days: the highest score in the buy zone. Buy at the next open, but only if it opens at or below the buy-below price; otherwise the pick lapses. The score weighs the discount to fair value (35), quality (30), growth (20) and timing (15).`,
+      r.every_days
+        ? `One pick at a time. At most one new pick every ${r.every_days} days: the highest score in the buy zone. Buy at the next open, but only if it opens at or below the buy-below price; otherwise the pick lapses. ${scoring}`
+        : `Naming a pick. A stock is named on the first night it clears every check. When several qualify together they are all named, best score first. Buy at the next open, but only if it opens at or below the buy-below price; otherwise the pick lapses and the stock is not named again for two weeks. ${scoring}`,
       `Selling, whichever comes first. A close at or above the target. A close ${plain(r.stop_large)}% below the buy price for a large cap, ${plain(r.stop_mid)}% for a mid cap, ${plain(r.stop_small)}% for a small cap. The business failing looser checks (earnings turn negative, return on equity under ${plain(hd.roe)}%, debt over ${plain(hd.de)}× equity, Piotroski ${hd.pio} or less). Fair value cut by ${plain(R.fv_cut)}% or more, down to the price or below. Or ${Math.round(r.medium_days / 30.4)} months for a 6–12 month pick and ${Math.round(r.long_days / 30.4)} months for a 1–2 year pick. A stock sold at a loss is not picked again for ${R.repick_days} days.`,
       "A hand veto. A stock can be kept out by name with the reason (the research_skip list in config.json). That is where a promoter pledge, a governance question or bad loans go, after reading the company's own results.",
       "Tax, for your own planning. Gains on shares sold within 12 months are taxed at 20%; after 12 months at 12.5% on gains above ₹1.25 lakh a year. A 6–12 month pick sold at its target usually pays the higher rate. Delivery charges are roughly 0.25% for a round trip.",

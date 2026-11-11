@@ -193,9 +193,11 @@ PICK_DEFAULTS = {"every_days": 10, "target_pct": 5.0, "window_days": 91, "stop_p
 # Research portfolio: 6-month to 2-year investments from the Nifty 500, bought only at a margin of safety
 # below fair value. All percentages; config.json's "research" block overrides any of them.
 RESEARCH_DEFAULTS = {
-    # One stock at a time, with the whole amount in it. Set max_positions above 1 to split the amount into
-    # equal parts instead; max_sector and max_small only matter then.
-    "pot": 100000, "max_positions": 1, "every_days": 14, "max_sector": 2, "max_small": 2,
+    # Every stock that clears every check is named on the night it qualifies, each sized at pick_size;
+    # which ones to take is the investor's call, by budget. The four limits are off at 0: max_positions
+    # caps how many picks are open at once, every_days spaces new picks out, max_sector and max_small
+    # cap picks in one sector and in small caps.
+    "pick_size": 100000, "max_positions": 0, "every_days": 0, "max_sector": 0, "max_small": 0,
     "discount_large": 20.0, "discount_mid": 25.0, "discount_small": 30.0,  # margin of safety: % below fair value needed to buy
     "stop_large": 15.0, "stop_mid": 18.0, "stop_small": 22.0,         # closing-basis stop under the buy price
     # Return demanded: the 10-year government bond yield (about 7.3% in November 2026) plus roughly
@@ -210,7 +212,8 @@ def load_config():
     cfg = jload(ROOT / "config.json", {})
     research = dict(RESEARCH_DEFAULTS)
     for k, v in (cfg.get("research") or {}).items():
-        if k in research and isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
+        off = v == 0 and k in ("max_positions", "every_days", "max_sector", "max_small")  # 0 switches a limit off
+        if k in research and isinstance(v, (int, float)) and not isinstance(v, bool) and (v > 0 or off):
             research[k] = int(v) if isinstance(RESEARCH_DEFAULTS[k], int) else float(v)
     pick = dict(PICK_DEFAULTS)
     for k, v in (cfg.get("pick") or {}).items():
@@ -1330,6 +1333,7 @@ RESEARCH_MIN = {                 # entry checks
 RESEARCH_HOLD = {"roe": 10.0, "de": 1.5, "pio": 3}   # a holding that breaks any of these is sold
 FV_CUT = 10.0                    # ...and so is one whose fair value has been cut this much, down to the price or below
 REPICK_DAYS = 90                 # a stock sold at a loss or on failed checks is not picked again for this long
+LAPSE_DAYS = 14                  # nor is one whose pick lapsed (it opened above its buy price), for this long
 LONG_TERM = {"roe": 18.0, "growth": 12.0, "de": 0.5, "pio": 6}  # compounders get the 1-2 year horizon
 PE_CAP, LENS_CAP = 35.0, 2.0     # no method may use a P/E above 35 or put fair value above twice the price
 LONG_GROWTH = 12.0               # a 1-2 year target is fair value one year on, grown at this rate at most
@@ -1579,8 +1583,8 @@ def research_track(p, rows, asof):
 
 
 def build_research(days, adj, idx, meta, cfg, names, asof, make_picks):
-    """Screen the Nifty 500, keep the research portfolio's log up to date, and name a new pick when a
-    slot is free, one is due and a stock clears every check.
+    """Screen the Nifty 500, keep the research log up to date, and name as a new pick every stock that
+    clears every check (within any limits the settings turn on).
 
     Returns the app's "research" block and, per stock, what its own page shows."""
     R, skip = cfg["research"], cfg["research_skip"]
@@ -1597,7 +1601,7 @@ def build_research(days, adj, idx, meta, cfg, names, asof, make_picks):
     for s in n500:
         if s in large:
             capmap[s] = "L"
-    slot = R["pot"] / R["max_positions"]
+    slot = R["pick_size"]  # rupees in each pick
     idays = sorted(d for d in idx if idx[d].get("n500") or idx[d].get("nifty"))
 
     def index_on(d, key):  # index close on d, or on the last session before it
@@ -1716,37 +1720,45 @@ def build_research(days, adj, idx, meta, cfg, names, asof, make_picks):
         if now and not p.get("done"):
             p["fv_now"] = rnd(now["a"]["fv"])
 
-    # A new pick: at most one every `every_days`, only into a free slot, only if a stock clears everything,
-    # and only on a night when the fundamentals and the prices are from the same session.
+    # New picks: every stock that clears everything, best score first, within any limits the settings turn
+    # on, and only on a night when the fundamentals and the prices are from the same session.
     real = [p for p in picks if p["st"] != "lapsed"]
     open_now = [p for p in real if not p.get("done")]
     last_d = max((p["d"] for p in real), default=None)
-    due = plus_days(last_d, R["every_days"]) if last_d else asof
+    due = plus_days(last_d, R["every_days"]) if last_d and R["every_days"] else asof
     ready = bool(n500) and fresh and funnel["valued"] >= 0.5 * len(n500)
     note = None
     held = {p["s"] for p in open_now}
     # No second try at a stock that just opened above its buy price, and none soon after a losing exit.
-    recent = {p["s"] for p in picks if p["st"] == "lapsed" and p["d"] > plus_days(asof, -R["every_days"])}
+    recent = {p["s"] for p in picks if p["st"] == "lapsed" and p["d"] > plus_days(asof, -LAPSE_DAYS)}
     recent |= {p["s"] for p in real if p.get("done") and p["st"] != "target" and (p.get("xd") or p["d"]) > plus_days(asof, -REPICK_DAYS)}
     sectors = {}
     for p in open_now:
         sectors[p.get("ind", "")] = sectors.get(p.get("ind", ""), 0) + 1
     smalls = sum(1 for p in open_now if p.get("cap") == "S")
+    limit = R["max_positions"]  # 0: any number of picks may be open
+
+    def sector(s):
+        return names.get(s, {}).get("ind", "")
 
     def allowed(s):
         return (s not in held and s not in recent and s not in skip
-                and sectors.get(names.get(s, {}).get("ind", ""), 0) < R["max_sector"]
-                and not (cards[s]["cap"] == "S" and smalls >= R["max_small"]))
+                and not (R["max_sector"] and sectors.get(sector(s), 0) >= R["max_sector"])
+                and not (R["max_small"] and cards[s]["cap"] == "S" and smalls >= R["max_small"]))
 
     buyable = sorted((s for s in good if cards[s]["all"]), key=lambda s: (-cards[s]["sc"], s))
+    made = []
     if not ready:
         note = ("Fundamentals for the Nifty 500 haven't arrived or are more than a week old, so no research pick is made. "
                 "The screen resumes when the next snapshot comes in.")
-    elif make_picks and doc.get("d") == asof and asof >= due and len(open_now) < R["max_positions"]:
-        s = next((s for s in buyable if allowed(s)), None)
-        if s:
+    elif make_picks and doc.get("d") == asof and asof >= due:
+        ikey = "n500" if idx.get(asof, {}).get("n500") else "nifty"
+        for s in buyable:
+            if limit and len(open_now) >= limit:
+                break
+            if not allowed(s):
+                continue
             x, r = cards[s], row(s)
-            ikey = "n500" if idx.get(asof, {}).get("n500") else "nifty"
             new = {"d": asof, "s": s, "n": r["n"], "cap": x["cap"], "ind": r["ind"], "fin": x["fin"], "hz": r["hz"],
                    "c0": r["c"], "fv": r["fv"], "up": r["up"], "bb": r["bb"], "tgt": r["tgt"], "tgt_pct": r["tgt_pct"],
                    "stop_pct": r["stop_pct"], "days": R["long_days"] if r["hz"] == "L" else R["medium_days"],
@@ -1755,15 +1767,22 @@ def build_research(days, adj, idx, meta, cfg, names, asof, make_picks):
             picks.append(new)
             real.append(new)
             open_now.append(new)
-            due = plus_days(asof, R["every_days"])
-    if ready and not note:
-        if len(open_now) >= R["max_positions"] and R["max_positions"] == 1:
+            made.append(s)
+            held.add(s)
+            sectors[sector(s)] = sectors.get(sector(s), 0) + 1
+            smalls += x["cap"] == "S"
+            if R["every_days"]:  # paced: one pick, then wait
+                due = plus_days(asof, R["every_days"])
+                break
+    if ready and not note and not made:
+        if limit == 1 and open_now:
             note = (f"The money is in {open_now[0]['s']}, so no new pick is named until it is sold. "
                     "Other stocks that reach the buy zone are still listed below.")
-        elif len(open_now) >= R["max_positions"]:
-            note = f"All {R['max_positions']} positions are in use, so no new pick is made until one closes."
-        elif not any(allowed(s) for s in buyable) and asof >= due:
-            note = "No stock clears every check tonight. Holding cash is part of the plan; the screen looks again every night."
+        elif limit and len(open_now) >= limit:
+            note = f"All {limit} positions are in use, so no new pick is made until one closes."
+        elif asof >= due and not any(allowed(s) for s in buyable):
+            note = ("Nothing new tonight: every stock in the buy zone is already an open pick." if any(s in held for s in buyable) else
+                    "No stock clears every check tonight. Waiting is part of the plan; the screen looks again every night.")
         elif asof >= due and doc.get("d") != asof:
             note = ("The fundamentals and the prices are from different days, so no new pick is named from them. "
                     "The next nightly run looks again.")
@@ -1860,7 +1879,7 @@ def build(make_picks=False):
           + (f"latest pick {newest['s']} ({newest['d']}), next due {picks['due']}" if newest else "no pick yet"))
     f, held = research["funnel"], [p for p in research["picks"] if not p.get("done")]
     print(f"Research: {f['quality']} of {f['universe']} pass the quality checks, {f['buy']} in the buy zone; "
-          + (f"holding {', '.join(p['s'] for p in held)}" if held else "no open research pick"))
+          + (f"open picks: {', '.join(p['s'] for p in held)}" if held else "no open research pick"))
 
 
 def main():
