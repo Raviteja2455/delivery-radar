@@ -1,5 +1,5 @@
 Fundamentals: no row for 4 stocks: BAGMANE, BIRET, DUMMYHEG, EMBASSY
-Fundamentals: 497 of 501 stocks, 67 readings each
+Fundamentals: 497 of 501 stocks, 108 readings each
 eq 2026-11-10: NSE sent the file for 2026-11-09, so 2026-11-10 was not a trading day
 New day files: {'eq': 0, 'idx': 0, 'fo': 0, 'part': 0}
 Built docs/data.json: 100 stocks, data as of 2026-11-09; latest pick DRREDDY (2026-11-09), next due 2026-11-19
