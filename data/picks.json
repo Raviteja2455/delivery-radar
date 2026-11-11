@@ -1,1 +1,1 @@
-{"picks":[]}
+{"picks":[{"d":"2026-11-09","s":"DRREDDY","why":{"sc":87.3,"v":[18.17,17.37,4.03,2,-0.38],"p":[98,92,87,58,92],"acc":4,"dist":2,"dp10":57.2,"dpb":54.9,"s50":1228.33,"ext":6.7,"r5":3.2},"rules":{"every_days":10,"target_pct":5.0,"window_days":91,"stop_pct":8.0},"res":{"st":"new","c":1385.0,"ed":null,"e":null,"t":null,"sl":null,"dl":null,"last":1385.0,"ld":"2026-11-09","ret":null,"hold":null,"peak":null,"low":null,"hd":null,"xd":null,"days":null,"nif":null,"vs":null}}]}
