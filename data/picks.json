@@ -1,1 +1,1 @@
-{"picks":[]}
+{"picks":[{"d":"2026-11-11","s":"BHARTIARTL","why":{"sc":86.0,"v":[8.54,16.84,-0.69,7,-0.52],"p":[85,91,74,97,93],"acc":8,"dist":1,"dp10":67.6,"dpb":68.1,"s50":1876.16,"ext":7.7,"r5":2.1},"rules":{"every_days":10,"target_pct":5.0,"window_days":91,"stop_pct":8.0},"res":{"st":"new","c":2109.0,"ed":null,"e":null,"t":null,"sl":null,"dl":null,"last":2109.0,"ld":"2026-11-11","ret":null,"hold":null,"peak":null,"low":null,"hd":null,"xd":null,"days":null,"nif":null,"vs":null}}]}
