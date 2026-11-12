@@ -1,6 +1,47 @@
 Fundamentals: no row for 4 stocks: BAGMANE, BIRET, DUMMYHEG, EMBASSY
 Fundamentals: 497 of 501 stocks, 69 readings each
 eq 2026-11-10: NSE sent the file for 2026-11-09, so 2026-11-10 was not a trading day
-New day files: {'eq': 0, 'idx': 0, 'fo': 0, 'part': 0}
-Built docs/data.json: 100 stocks, data as of 2026-11-09; latest pick DRREDDY (2026-11-09), next due 2026-11-19
-Research: 81 of 501 pass the quality checks, 0 in the buy zone; no open research pick
+eq 2026-11-01: NSE sent the file for 2026-10-30, so 2026-11-01 was not a trading day
+eq 2026-10-25: NSE sent the file for 2026-10-23, so 2026-10-25 was not a trading day
+eq 2026-10-18: NSE sent the file for 2026-10-16, so 2026-10-18 was not a trading day
+eq 2026-10-11: NSE sent the file for 2026-10-09, so 2026-10-11 was not a trading day
+eq 2026-10-04: NSE sent the file for 2026-10-01, so 2026-10-04 was not a trading day
+eq 2026-09-27: NSE sent the file for 2026-09-25, so 2026-09-27 was not a trading day
+eq 2026-09-20: NSE sent the file for 2026-09-18, so 2026-09-20 was not a trading day
+eq 2026-09-13: NSE sent the file for 2026-09-11, so 2026-09-13 was not a trading day
+eq 2026-09-06: NSE sent the file for 2026-09-04, so 2026-09-06 was not a trading day
+eq 2026-08-30: NSE sent the file for 2026-08-28, so 2026-08-30 was not a trading day
+eq 2026-08-23: NSE sent the file for 2026-08-21, so 2026-08-23 was not a trading day
+eq 2026-08-16: NSE sent the file for 2026-08-14, so 2026-08-16 was not a trading day
+eq 2026-08-09: NSE sent the file for 2026-08-07, so 2026-08-09 was not a trading day
+eq 2026-08-02: NSE sent the file for 2026-07-31, so 2026-08-02 was not a trading day
+eq 2026-07-26: NSE sent the file for 2026-07-24, so 2026-07-26 was not a trading day
+eq 2026-07-19: NSE sent the file for 2026-07-17, so 2026-07-19 was not a trading day
+eq 2026-07-12: NSE sent the file for 2026-07-10, so 2026-07-12 was not a trading day
+eq 2026-07-05: NSE sent the file for 2026-07-03, so 2026-07-05 was not a trading day
+eq 2026-06-28: NSE sent the file for 2026-06-25, so 2026-06-28 was not a trading day
+eq 2026-06-21: NSE sent the file for 2026-06-19, so 2026-06-21 was not a trading day
+eq 2026-06-14: NSE sent the file for 2026-06-12, so 2026-06-14 was not a trading day
+eq 2026-06-07: NSE sent the file for 2026-06-05, so 2026-06-07 was not a trading day
+eq 2026-05-31: NSE sent the file for 2026-05-29, so 2026-05-31 was not a trading day
+eq 2026-05-24: NSE sent the file for 2026-05-22, so 2026-05-24 was not a trading day
+eq 2026-05-17: NSE sent the file for 2026-05-15, so 2026-05-17 was not a trading day
+eq 2026-05-10: NSE sent the file for 2026-05-08, so 2026-05-10 was not a trading day
+eq 2026-05-03: NSE sent the file for 2026-04-30, so 2026-05-03 was not a trading day
+eq 2026-04-26: NSE sent the file for 2026-04-24, so 2026-04-26 was not a trading day
+eq 2026-04-19: NSE sent the file for 2026-04-17, so 2026-04-19 was not a trading day
+eq 2026-04-12: NSE sent the file for 2026-04-10, so 2026-04-12 was not a trading day
+eq 2026-04-05: NSE sent the file for 2026-04-02, so 2026-04-05 was not a trading day
+eq 2026-03-29: NSE sent the file for 2026-03-27, so 2026-03-29 was not a trading day
+eq 2026-03-22: NSE sent the file for 2026-03-20, so 2026-03-22 was not a trading day
+eq 2026-03-15: NSE sent the file for 2026-03-13, so 2026-03-15 was not a trading day
+eq 2026-03-08: NSE sent the file for 2026-03-06, so 2026-03-08 was not a trading day
+eq 2026-03-01: NSE sent the file for 2026-02-27, so 2026-03-01 was not a trading day
+eq 2026-02-22: NSE sent the file for 2026-02-20, so 2026-02-22 was not a trading day
+eq 2026-02-15: NSE sent the file for 2026-02-13, so 2026-02-15 was not a trading day
+eq 2026-02-08: NSE sent the file for 2026-02-06, so 2026-02-08 was not a trading day
+eq 2026-01-25: NSE sent the file for 2026-01-23, so 2026-01-25 was not a trading day
+eq 2026-01-18: NSE sent the file for 2026-01-16, so 2026-01-18 was not a trading day
+New day files: {'eq': 2, 'idx': 2, 'fo': 1, 'part': 1}
+Built docs/data.json: 100 stocks, data as of 2026-11-11; latest pick BHARTIARTL (2026-11-11), next due 2026-11-21
+Research: 87 of 501 pass the quality checks, 0 in the buy zone; no open research pick
