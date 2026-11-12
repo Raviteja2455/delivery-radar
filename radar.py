@@ -704,40 +704,61 @@ def holiday_copies(eq):
     return {d for prev, d in zip(days, days[1:]) if eq[d] == eq[prev]}
 
 
-def fetch_deal_history(src, meta, today, keep, add):
+def deal_api(src, kind, a, b, keep):
+    """One request to NSE's deal-history API. Returns (kept rows, rows NSE sent), or (None, 0) on no answer."""
+    try:
+        t = src.get(URLS["deals_api"].format(kind=kind, a=a, b=b))
+    except RuntimeError:
+        return None, 0
+    rows = parse_deals_api(t, kind.upper(), keep) if t else None
+    if rows is None:
+        return None, 0
+    try:
+        doc = json.loads(t)
+        raw = len((doc.get("data") if isinstance(doc, dict) else doc) or [])
+    except (TypeError, ValueError, AttributeError):
+        raw = 0
+    return rows, raw
+
+
+def fetch_deal_history(src, meta, today, keep, add, sessions):
     """Deals from NSE's deal-history API: the last DEALS_AGAIN days every night (so a night whose bulk.csv
-    failed is filled in), and, until it is done, the DEALS_BACK days before that, a window at a time. NSE's
-    API sometimes refuses cloud servers; then the same-day files alone keep the record going, and the next
-    run tries again. meta["deals_from"] is the first day the history has covered."""
-    have = meta.get("deals_from")
-    start = today - timedelta(days=DEALS_BACK)
-    windows = [(today - timedelta(days=DEALS_AGAIN), today)]
-    if not have or have > start.isoformat():
-        end = date.fromisoformat(have) - timedelta(days=1) if have else windows[0][0] - timedelta(days=1)
-        while end >= start:
-            a = max(start, end - timedelta(days=DEALS_STEP - 1))
-            windows.append((a, end))
-            end = a - timedelta(days=1)
-    added = 0
-    for a, b in windows:
-        got = []
-        for kind in ("bulk", "block"):
-            try:
-                t = src.get(URLS["deals_api"].format(kind=kind, a=a, b=b))
-            except RuntimeError:
-                t = None
-            rows = parse_deals_api(t, kind.upper(), keep) if t else None
+    failed is filled in), and, until it is done, the DEALS_BACK days before that.
+
+    Block deals come DEALS_STEP days per request. Bulk deals come one session per request: asked for a
+    longer range, NSE sends only the first session's list (seen in November 2026). meta["deals_from"] and
+    meta["bulk_from"] are the first day each kind has been read back to. NSE's API sometimes refuses cloud
+    servers; then the same-day files alone keep the record going, and the next run carries on."""
+    last = max(sessions) if sessions else ""
+    start, recent = today - timedelta(days=DEALS_BACK), today - timedelta(days=DEALS_AGAIN)
+    total = 0
+    for kind, key, step in (("block", "deals_from", DEALS_STEP), ("bulk", "bulk_from", 1)):
+        have = meta.get(key)
+        want = [d for d in reversed(list(calendar_days(start, today)))
+                if (d >= recent or not have or d.isoformat() < have)
+                and (d.isoformat() in sessions or (d.isoformat() > last and d.weekday() < 5))]
+        windows = []  # [oldest, newest] day of each request, newest request first
+        for d in want:
+            if windows and (windows[-1][1] - d).days < step:
+                windows[-1][0] = d
+            else:
+                windows.append([d, d])
+        sent = []
+        for a, b in windows:
+            rows, raw = deal_api(src, kind, a, b, keep)
             if rows is None:
-                print(f"NSE's deal history did not answer for {a:%d %b} to {b:%d %b}; tonight uses the same-day files only.")
-                meta["deals_from"] = have
-                return added
-            got.extend(rows)
-        added += add(got)
-        if not have or a.isoformat() < have:
-            have = a.isoformat()
-    meta["deals_from"] = have
-    print(f"Deal history: {added} new deals; covered from {have}")
-    return added
+                print(f"NSE's {kind}-deal history did not answer for {a:%d %b} to {b:%d %b}; the next run carries on from there.")
+                break
+            total += add(rows)
+            sent.append(raw)
+            if not have or a.isoformat() < have:
+                have = a.isoformat()
+        meta[key] = have
+        if sent:
+            print(f"{kind.capitalize()}-deal history: {len(sent)} requests, {sum(sent)} rows from NSE "
+                  f"(at most {max(sent)} in one), read back to {have}")
+    print(f"Deal history: {total} new deals")
+    return total
 
 
 def fetch_deal_prices(src, deals, who, uset, today):
@@ -891,7 +912,7 @@ def update(src, today=None):
             print(f"{kind} deals unavailable: {e}")
             t = None
         add(parse_deals(t, kind.upper(), keep) if t else [])
-    fetch_deal_history(src, meta, today, keep, add)
+    fetch_deal_history(src, meta, today, keep, add, {p.stem for p in (DATA / "eq").glob("*.json")})
     cut = (today - timedelta(days=DEALS_KEEP)).isoformat()
     deals = sorted((x for x in deals if x["d"] >= cut), key=lambda x: (x["d"], x["s"], x["k"], x["bs"], x["cl"]))
     jsave(DATA / "deals.json", deals)
