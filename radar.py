@@ -177,11 +177,10 @@ def csv_rows(text):
         yield {h: (rec[i].strip() if i < len(rec) else "") for i, h in enumerate(header)}
 
 
-def weekdays(start, end):
+def calendar_days(start, end):
     d = start
     while d <= end:
-        if d.weekday() < 5:
-            yield d
+        yield d
         d += timedelta(days=1)
 
 
@@ -614,12 +613,16 @@ def update(src, today=None):
         missing["eq"].add(iso)
         print(f"Removed eq {iso}: it repeated the previous session's file, so it was a holiday")
 
-    for kind in ("eq", "idx", "fo", "part"):  # eq first: it tells us which weekdays were holidays
-        # Newest day first, so tonight's files are in before any long backfill starts.
-        for d in reversed(list(weekdays(today - timedelta(days=LOOKBACK[kind]), today))):
+    for kind in ("eq", "idx", "fo", "part"):  # eq first: it tells us which days were trading days
+        # Newest day first, so tonight's files are in before any long backfill starts. Saturdays and
+        # Sundays are asked for too: NSE trades on some of them (Budget day, Diwali's Muhurat session),
+        # and a session left out makes the next day's move look like a split.
+        for d in reversed(list(calendar_days(today - timedelta(days=LOOKBACK[kind]), today))):
             iso = d.isoformat()
             if iso in missing[kind] or (kind != "eq" and iso in missing["eq"]):
                 continue
+            if kind != "eq" and d.weekday() >= 5 and not (DATA / "eq" / f"{iso}.json").exists():
+                continue  # a weekend with no delivery file was not a session
             path = DATA / kind / f"{iso}.json"
             if path.exists():
                 stored = jload(path, {})
@@ -710,11 +713,31 @@ def update(src, today=None):
 
 
 # ----------------------------------------------------------------------------- analytics
-def adjusted_rows(series):
+def gap_days(eq, days):
+    """Stored days that follow a session missing from the store.
+
+    After a real session, a stock's previous close matches the last stored close unless it had a
+    split or bonus. When most stocks disagree, a whole session is missing in between (not yet
+    downloaded, or never published), and the difference is that day's price move, not an adjustment."""
+    out = set()
+    for prev, d in zip(days, days[1:]):
+        n = off = 0
+        for sym, r in eq[d].items():
+            before = eq[prev].get(sym)
+            if before and before[4] and r[0]:
+                n += 1
+                off += abs(r[0] / before[4] - 1) > 0.0005
+        if n >= 20 and off > n / 2:
+            out.add(d)
+    return out
+
+
+def adjusted_rows(series, gaps=()):
     """Turn [(date, raw fields)] into dicts, back-adjusting prices and quantities for splits/bonuses.
 
     NSE's PREV_CLOSE on an ex-date is already adjusted, so a jump between it and the previous
-    day's close reveals the adjustment factor."""
+    day's close reveals the adjustment factor. Days in `gaps` follow a missing session, where that
+    jump is an ordinary price move, so no adjustment is read from them."""
     rows = [dict(zip(EQ_KEYS, raw), d=d) for d, raw in series]
     factor = 1.0
     for i in range(len(rows) - 1, -1, -1):
@@ -728,7 +751,8 @@ def adjusted_rows(series):
                     r[k] /= factor
         if i > 0:
             prev_close, prev_close_today = series[i - 1][1][4], series[i][1][0]
-            if prev_close and prev_close_today and abs(prev_close_today / prev_close - 1) > 0.02:
+            if (prev_close and prev_close_today and abs(prev_close_today / prev_close - 1) > 0.02
+                    and series[i][0] not in gaps):
                 factor *= prev_close_today / prev_close
     return rows
 
@@ -1817,6 +1841,33 @@ def build_research(days, adj, idx, meta, cfg, names, asof, make_picks):
     return block, own
 
 
+TRACK_SESSIONS = 80  # daily highs, lows and closes sent to the app: a little more than a pick's three-month window
+
+
+def track_block(adj, eq, days, idx, symbols):
+    """Each stock's recent daily high, low and close, so the app can follow trades logged on the phone.
+
+    Prices are restated for splits and bonuses, like every other series. `k` gives, for a stock that had
+    one in the window, the factor on each day that turns a price paid that day into today's shares."""
+    dates = days[-TRACK_SESSIONS:]
+    at = {d: i for i, d in enumerate(dates)}
+    series, factors = {}, {}
+    for s in symbols:
+        hi, lo, cl, k = ([None] * len(dates) for _ in range(4))
+        for x in (adj.get(s) or [])[-TRACK_SESSIONS:]:
+            i = at.get(x["d"])
+            if i is None or x["c"] is None:
+                continue
+            hi[i], lo[i], cl[i] = rnd(x["h"] or x["c"]), rnd(x["l"] or x["c"]), rnd(x["c"])
+            raw = eq[x["d"]][s][4]
+            k[i] = round(x["c"] / raw, 6) if raw else 1.0
+        if any(v is not None for v in cl):
+            series[s] = [hi, lo, cl]
+            if any(v is not None and abs(v - 1) > 1e-6 for v in k):
+                factors[s] = k
+    return {"dates": dates, "nifty": [idx.get(d, {}).get("nifty") for d in dates], "s": series, "k": factors}
+
+
 def build(make_picks=False):
     """Rebuild docs/data.json from the stored history. New picks are named only on the nightly update,
     never by a rebuild done by hand."""
@@ -1839,9 +1890,12 @@ def build(make_picks=False):
     det_days = days[-DETAIL_DAYS:]
 
     # Split-adjusted history for every stored symbol; picked stocks that left the index are in here too.
+    gaps = gap_days(eq, days)
+    if gaps:
+        print("A trading session is missing before " + ", ".join(sorted(gaps)) + "; no split is read from those days.")
     adj = {}
     for sym in sorted({s for d in days for s in eq[d]}):
-        adj[sym] = adjusted_rows([(d, eq[d][sym]) for d in days if sym in eq[d]])
+        adj[sym] = adjusted_rows([(d, eq[d][sym]) for d in days if sym in eq[d]], gaps)
     picks, tonight = build_picks(adj, days, idx, meta, cfg, names, asof, make_picks)
     research, own = build_research(days, adj, idx, meta, cfg, names, asof, make_picks)
 
@@ -1865,6 +1919,7 @@ def build(make_picks=False):
         "market": market_summary(idx, flows, stocks, asof),
         "fii": fii_activity(days, flows, part, fo, asof),
         "stocks": stocks,
+        "track": track_block(adj, eq, days, idx, [st["s"] for st in stocks]),
         "picks": picks,
         "research": research,
         "universe": "Nifty 100" if len(n100) >= 90 else "Nifty 50",

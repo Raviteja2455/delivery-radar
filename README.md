@@ -183,6 +183,23 @@ line. With a +5% target and a −8% stop, about 62% of closed picks must reach t
 not deducted (about 0.25% for a delivery round trip). The rule itself has no long back-test behind it yet; the replay
 and the live record are its evidence.
 
+**Logging your own trades.** When you buy a pick, log it on the Picks tab: stock, date, price paid and quantity. The
+target (+5%) and stop (−8%, closing basis) are filled in from the price and can be changed. The nightly file carries
+each Nifty 100 stock's daily high, low and close for the last 80 sessions, so every logged trade is worked out afresh
+after each update:
+
+| Shown for each trade | How it is worked out |
+|---|---|
+| Hold, Target or Exit | Target: a day's high reached your target (on the day you bought, only the close counts). Exit: a close at or below your stop, or 91 days since you bought |
+| Net result | Price change × quantity, less delivery charges (STT, stamp duty, exchange and DP charges) |
+| Today, best, worst, vs Nifty 50 | The last session's change in rupees; the highest high and lowest low since the buy; your gain less the Nifty 50's over the same days |
+| Day by day | Each session's close, day change and running profit or loss since you bought |
+
+Record the exit when you sell, and the trade moves to the closed list with its net result. The Picks tab shows `!`
+when a logged trade should be sold. Trades are saved in the browser on your phone, with the Swing tab's trades, and
+its backup covers both. They never go to GitHub, so there are no alerts: the numbers are ready whenever you open the
+app after the nightly update. A split or bonus after you buy restates your price and quantity automatically.
+
 The Swing tab still runs only on the Nifty 50, the stocks plan v2 was tested on. Each stock's page shows its pick
 score and rank, and the Stocks tab can be sorted by it.
 
@@ -285,6 +302,13 @@ only when the fundamentals and the prices are from the same session.
 
 Each stock's own page shows its research view: the fair value and checklist if it passes the quality checks, or the
 checks it fails. `python tests/test_research.py` checks the arithmetic on made-up numbers.
+
+## Weekend sessions
+
+NSE trades on a few Saturdays and Sundays: Budget day (Sunday 1 February 2026) and Diwali's Muhurat session (Sunday
+8 November 2026) were both sessions. The nightly run asks for weekend files too. If a session is ever missing from
+the store, the next day's price move is not mistaken for a split: the build notices that most stocks' previous close
+disagrees with the last stored close, reads no adjustment from that day, and says so in the run's log.
 
 ## Adding stocks outside the Nifty 100
 

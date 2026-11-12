@@ -91,6 +91,7 @@ HOLIDAYS = {date(2026, 1, 26), date(2026, 10, 2), date(2026, 10, 20)}
 # NSE answers some holiday addresses with the previous session's file instead of "not found";
 # these holidays reproduce that, so the pipeline must notice the date inside the file.
 SERVED_AS_COPY = {date(2026, 10, 2), date(2026, 10, 20)}
+SPECIAL = {date(2026, 9, 6)}  # a Sunday session, like Budget day or Diwali's Muhurat trading
 SPLIT = ("BEL", date(2026, 9, 15), 2)  # 1:2 split: price halves, quantities double
 EXPIRIES = [date(2025, 12, 30)] + [date(2026, m, d) for m, d in
             [(1, 27), (2, 24), (3, 31), (4, 28), (5, 26), (6, 30), (7, 28), (8, 25), (9, 29), (10, 27), (11, 24), (12, 29)]]
@@ -106,7 +107,7 @@ def main(out, last):
     rnd = random.Random(7)
     start = date(2025, 12, 1)
     days = [start + timedelta(n) for n in range((last - start).days + 1)]
-    days = [d for d in days if d.weekday() < 5 and d not in HOLIDAYS]
+    days = [d for d in days if (d.weekday() < 5 and d not in HOLIDAYS) or d in SPECIAL]
 
     with open(out / "ind_nifty50list.csv", "w", newline="") as f:
         w = csv.writer(f)
