@@ -343,8 +343,8 @@ the day's bulk deals; it is counted once.
 
 **Where the deals come from.** Every night `bulk.csv` and `block.csv` (that day's deals) and NSE's deal-history API
 (the Large Deals page) for the last week, which fills any night the files were missed. The first run with this
-feature reads the last 90 days: block deals a month per request, bulk deals one session per request, because asked
-for a longer range NSE sends only the first session's bulk list. The API sometimes refuses GitHub's servers; then the day's files keep the
+feature reads the last 90 days: block deals a month per request, bulk deals one session per request, each as NSE's
+CSV download, because the API's JSON answer stops at about 70 rows and cuts off a busy session's bulk list. The API sometimes refuses GitHub's servers; then the day's files keep the
 record going and the next run tries again. Deals are kept 200 days in `data/deals.json`: every deal in the Nifty 500,
 and FII and fund deals in any stock. Tonight's close for deal stocks outside the Nifty 500 is saved in `data/dealpx.json`.
 

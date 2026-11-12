@@ -461,6 +461,33 @@ def parse_deals_api(text, kind, keep):
     return out
 
 
+def parse_deals_table(text, kind, keep):
+    """A deal list as CSV with NSE's column names in whichever spelling it uses ("Buy/Sell", "Buy / Sell"...).
+    Returns (kept rows, rows read), or (None, 0) when it isn't such a table."""
+    out, raw, cols = [], 0, None
+    for r in csv_rows(text):
+        if cols is None:
+            keys = list(r)
+            flat = {k: re.sub(r"[^a-z]", "", k.lower()) for k in keys}
+
+            def pick(*words, without=""):
+                return next((k for k in keys if all(w in flat[k] for w in words) and not (without and without in flat[k])), None)
+            cols = {"d": pick("date"), "s": pick("symbol"), "n": pick("security") or pick("name", without="client"),
+                    "cl": pick("client"), "bs": pick("buy"), "q": pick("quantity"), "p": pick("price")}
+            if not all(cols[k] for k in ("d", "s", "cl", "bs", "q")):
+                return None, 0
+        d = parse_date(r.get(cols["d"]))
+        if not d:
+            continue
+        raw += 1
+        x = deal_row(d, (r.get(cols["s"]) or "").strip(), kind, r.get(cols["cl"]), r.get(cols["bs"]),
+                     num(r.get(cols["q"])), num(r.get(cols["p"])) if cols["p"] else None,
+                     r.get(cols["n"]) if cols["n"] else None, keep)
+        if x:
+            out.append(x)
+    return (out, raw) if cols else (None, 0)
+
+
 # ----------------------------------------------------------------------------- deal participants
 # Who is behind a deal, read from the client name NSE prints. There is no official tag, so this is pattern
 # matching on names, in this order: names config.json forces either way; any mutual fund (always Indian);
@@ -495,7 +522,7 @@ FOREIGN_NAMES = (
     "ENDOWMENT", "SOVEREIGN",
     # tell-tale words in fund names and registered addresses
     "MAURITIUS", "SINGAPORE", "CAYMAN", "LUXEMBOURG", "IRELAND", "HONG KONG", "NETHERLANDS", "DELAWARE",
-    r"\(UK\)", r"\bU\.K\.", r"\bPLC\b", r"\bSICAV\b", r"\bPTE\b", r"\bGMBH\b", r"\bAG\b", r"\bL\.?P\.?$", r"\bLLC\b",
+    r"\(U\.?K\.?\)", r"\bPLC\b", r"\bSICAV\b", r"\bPTE\b", r"\bGMBH\b", r"\bAG\b", r"\bL\.?P\.?$", r"\bLLC\b",
     "MASTER FUND", "OFFSHORE", "EMERGING MARKET", r"\bODI\b", r"\bFPI\b", r"\bIFSC\b", "GLOBAL FUND",
 )
 OFFSHORE_NAMES = r"MAURITIUS|SINGAPORE|CAYMAN|LUXEMBOURG|IRELAND|HONG KONG|\bIFSC\b|\bODI\b|\bFPI\b"
@@ -705,20 +732,31 @@ def holiday_copies(eq):
 
 
 def deal_api(src, kind, a, b, keep):
-    """One request to NSE's deal-history API. Returns (kept rows, rows NSE sent), or (None, 0) on no answer."""
-    try:
-        t = src.get(URLS["deals_api"].format(kind=kind, a=a, b=b))
-    except RuntimeError:
-        return None, 0
-    rows = parse_deals_api(t, kind.upper(), keep) if t else None
-    if rows is None:
-        return None, 0
-    try:
-        doc = json.loads(t)
-        raw = len((doc.get("data") if isinstance(doc, dict) else doc) or [])
-    except (TypeError, ValueError, AttributeError):
-        raw = 0
-    return rows, raw
+    """One request to NSE's deal-history API. Returns (kept rows, rows NSE sent), or (None, 0) on no answer.
+
+    The CSV download (as on NSE's Large Deals page) comes first: the JSON answer stops at about 70 rows,
+    which cuts off a busy session's bulk deals (seen in November 2026). JSON is the fallback."""
+    for url in (URLS["deals_api"].format(kind=kind, a=a, b=b) + "&csv=true", URLS["deals_api"].format(kind=kind, a=a, b=b)):
+        try:
+            t = src.get(url)
+        except RuntimeError:
+            t = None
+        if not t or not t.strip():
+            continue
+        if t.lstrip()[:1] in "{[":
+            rows = parse_deals_api(t, kind.upper(), keep)
+            if rows is None:
+                continue
+            try:
+                doc = json.loads(t)
+                raw = len((doc.get("data") if isinstance(doc, dict) else doc) or [])
+            except (TypeError, ValueError, AttributeError):
+                raw = 0
+            return rows, raw
+        rows, raw = parse_deals_table(t, kind.upper(), keep)
+        if rows is not None:
+            return rows, raw
+    return None, 0
 
 
 def fetch_deal_history(src, meta, today, keep, add, sessions):
@@ -731,6 +769,10 @@ def fetch_deal_history(src, meta, today, keep, add, sessions):
     servers; then the same-day files alone keep the record going, and the next run carries on."""
     last = max(sessions) if sessions else ""
     start, recent = today - timedelta(days=DEALS_BACK), today - timedelta(days=DEALS_AGAIN)
+    if meta.get("deals_v") != 2:  # the first back-fill read truncated JSON; read both kinds again in full
+        meta.pop("deals_from", None)
+        meta.pop("bulk_from", None)
+        meta["deals_v"] = 2
     total = 0
     for kind, key, step in (("block", "deals_from", DEALS_STEP), ("bulk", "bulk_from", 1)):
         have = meta.get(key)

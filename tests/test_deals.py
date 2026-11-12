@@ -55,6 +55,17 @@ def test_api_parse():
     assert radar.deal_key(csv_row) == radar.deal_key(rows[1])
 
 
+def test_csv_parse():
+    keep = radar.deal_keeper({"SAGILITY"}, WHO)
+    text = ('"Date","Symbol","Security Name","Client Name","Buy / Sell","Quantity Traded","Trade Price / Wght. Avg. Price","Remarks"\n'
+            '"30-OCT-2026","SAGILITY","Sagility Limited","SAGILITY B.V.","SELL","56,00,00,000","42.76","-"\n'
+            '"30-OCT-2026","SAGILITY","Sagility Limited","SOCIETE GENERALE","BUY","4,75,06,626","42.75","-"\n'
+            '"30-OCT-2026","SMEXYZ","Sme Xyz Ltd","SOMEONE","BUY","1,000","10","-"\n')
+    rows, raw = radar.parse_deals_table(text, "BULK", keep)
+    assert raw == 3 and [(x["cl"], x["q"]) for x in rows] == [("SAGILITY B.V.", 56e7), ("SOCIETE GENERALE", 47506626.0)], rows
+    assert radar.parse_deals_table('{"data": []}', "BULK", keep) == (None, 0)    # JSON is not this table
+
+
 def test_merge_bulk_block():
     d = "2026-11-11"
     # the block trade listed again among the bulk deals: counted once
