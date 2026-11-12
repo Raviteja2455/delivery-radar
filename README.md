@@ -327,7 +327,8 @@ number is how many stocks FIIs bought in tonight's deals.
 
 **Who counts as an FII.** NSE prints only the client's name, so the script reads it: foreign banks' desks (Goldman
 Sachs, Societe Generale, BNP Paribas, Morgan Stanley, Citi, JP Morgan, BofA), foreign fund houses, hedge funds,
-sovereign and pension funds, and names registered abroad (Mauritius, Singapore, Cayman, Luxembourg, IFSC, "ODI").
+sovereign and pension funds, foreign private-equity and venture investors (SoftBank, Tencent, Peak XV, Alpha Wave),
+and names registered abroad (Mauritius, Singapore, Cayman, Luxembourg, IFSC, "ODI", "PLC", "LLC", "B.V.").
 Any mutual fund is Indian; the Indian arm of a foreign bank ("Goldman Sachs (India) Securities") is not an FII. To fix
 a name the patterns get wrong, add part of it to `config.json`:
 

@@ -507,11 +507,16 @@ FOREIGN_NAMES = (
     "SCHRODER", "NORDEA", "NEUBERGER", "TEMPLETON", "MATTHEWS", "WASATCH", "WILLIAM BLAIR", "ASHMORE",
     "EASTSPRING", "AMUNDI", r"\bAXA\b", "ALLIANZ GLOBAL", "PIMCO", "JANUS", "ARTISAN", "DODGE & COX", "LAZARD",
     "ROBECO", r"\bDWS\b", "UNION INVESTMENT", "LEGAL AND GENERAL", "LEGAL & GENERAL", "BAILLIE GIFFORD",
-    "FIRST STATE", "STEWART INVESTORS", "PINEBRIDGE", "MANULIFE", "THREADNEEDLE", "COLUMBIA", "METZLER",
-    "PRUDENTIAL HONG KONG", "FACTORY MUTUAL", "AMANSA", "NALANDA", "STEADVIEW", "TRUSTBRIDGE", "KOTAK MAHINDRA (INTERNATIONAL)",
+    "FIRST STATE", "STEWART INVESTORS", "PINEBRIDGE", "MANULIFE", "THREADNEEDLE", "COLUMBIA FUNDS", "COLUMBIA ACORN",
+    "METZLER", "EURO PACIFIC", "EUROPACIFIC", "ASIAN GEMS",
+    "PRUDENTIAL HONG KONG", "FACTORY MUTUAL", "AMANSA", "NALANDA", "STEADVIEW", "TRUSTBRIDGE", r"KOTAK MAHINDRA \(INTERNATIONAL\)",
     # hedge funds and trading houses registered as FPIs
     "INTEGRATED CORE STRATEGIES", "MILLENNIUM", "CITADEL", "JANE STREET", "GHISALLO", "VIRIDIAN", "NORTH ROCK",
     "OXBOW", "VITTORIA", "DYMON", "SEGANTII", "OPTIVER", "ELLIOTT", "TIGER GLOBAL", "MARSHALL WACE", "QUADRATURE",
+    # foreign private equity and venture investors, usually sellers after a listing (counted as foreign too)
+    "SOFTBANK", r"\bSVF\b", "PROSUS", "NASPERS", "TENCENT", "ALPHA WAVE", "PEAK XV", "SEQUOIA CAPITAL", "LIGHTSPEED",
+    r"\bACCEL\b", "Y COMBINATOR", "GENERAL ATLANTIC", "WARBURG PINCUS", r"\bKKR\b", "BLACKSTONE", "CARLYLE",
+    "BAIN CAPITAL", r"\bTPG\b", r"\bEQT\b", "NEWQUEST", "PLATINUM JASMINE",
     # sovereign funds, pension funds, development banks
     "NORGES BANK", "GOVERNMENT OF SINGAPORE", "MONETARY AUTHORITY", "ABU DHABI INVESTMENT", "KUWAIT INVESTMENT",
     "QATAR INVESTMENT", "PUBLIC INVESTMENT FUND", "CAISSE DE DEPOT", "CANADA PENSION", "CPP INVESTMENT",
@@ -522,7 +527,7 @@ FOREIGN_NAMES = (
     "ENDOWMENT", "SOVEREIGN",
     # tell-tale words in fund names and registered addresses
     "MAURITIUS", "SINGAPORE", "CAYMAN", "LUXEMBOURG", "IRELAND", "HONG KONG", "NETHERLANDS", "DELAWARE",
-    r"\(U\.?K\.?\)", r"\bPLC\b", r"\bSICAV\b", r"\bPTE\b", r"\bGMBH\b", r"\bAG\b", r"\bL\.?P\.?$", r"\bLLC\b",
+    r"\(U\.?K\.?\)", r"\bB\.?\s?V\.?$", r"\bAPS$", r"\bPLC\b", r"\bSICAV\b", r"\bPTE\b", r"\bGMBH\b", r"\bAG\b", r"\bL\.?P\.?$", r"\bLLC\b",
     "MASTER FUND", "OFFSHORE", "EMERGING MARKET", r"\bODI\b", r"\bFPI\b", r"\bIFSC\b", "GLOBAL FUND",
 )
 OFFSHORE_NAMES = r"MAURITIUS|SINGAPORE|CAYMAN|LUXEMBOURG|IRELAND|HONG KONG|\bIFSC\b|\bODI\b|\bFPI\b"
@@ -769,10 +774,10 @@ def fetch_deal_history(src, meta, today, keep, add, sessions):
     servers; then the same-day files alone keep the record going, and the next run carries on."""
     last = max(sessions) if sessions else ""
     start, recent = today - timedelta(days=DEALS_BACK), today - timedelta(days=DEALS_AGAIN)
-    if meta.get("deals_v") != 2:  # the first back-fill read truncated JSON; read both kinds again in full
+    if meta.get("deals_v") != 3:  # read both kinds again in full once: v1 read truncated JSON, v3 knows more FII names
         meta.pop("deals_from", None)
         meta.pop("bulk_from", None)
-        meta["deals_v"] = 2
+        meta["deals_v"] = 3
     total = 0
     for kind, key, step in (("block", "deals_from", DEALS_STEP), ("bulk", "bulk_from", 1)):
         have = meta.get(key)
