@@ -2222,7 +2222,8 @@ td.hi { color: var(--deliv); font-weight: 600; }
             return h("tr", {},
               h("td", {}, shortDate(r.d), h("small", { text: r.k === "BLOCK" ? "block" : "bulk" })),
               h("td", { class: "dl-cl" }, titleName(r.cl), dstate.who === "both" ? h("small", { text: WHO_TAG[r.t] }) : null,
-                other.length ? h("small", { text: `${r.bs === "BUY" ? "from" : "to"} ${other.join(", ")}${more}` }) : null),
+                h("small", { text: other.length ? `${r.bs === "BUY" ? "from" : "to"} ${other.join(", ")}${more}`
+                  : `${r.bs === "BUY" ? "seller" : "buyer"} not in NSE's lists` })),
               h("td", { class: r.bs === "BUY" ? "up" : "down", text: r.bs === "BUY" ? "Buy" : "Sell" }),
               h("td", {}, price(r.p), h("small", { text: r.pa ? `${price(r.pa)} adj.` : `${qty(r.q)} sh` })),
               h("td", {}, fmt(r.q * r.p / 1e7, r.q * r.p >= 1e9 ? 0 : 1), r.pa ? h("small", { text: `${qty(r.q)} sh` }) : null));
@@ -2271,7 +2272,8 @@ td.hi { color: var(--deliv); font-weight: 600; }
         "Most FII buying goes through the normal market in small orders and never appears in these lists. A deal here is the part with a name on it, usually a stake sale by a promoter or an early investor, taken by funds.",
         "Who is an FII is read from the client's name: foreign banks' desks (Goldman Sachs, Societe Generale, BNP Paribas, Morgan Stanley), foreign funds, sovereign and pension funds, and names registered abroad (Mauritius, Singapore, Cayman). Banks' desks often buy for clients or to hedge. A name tagged wrongly can be fixed with deal_names in config.json.",
         "MF & insurers are Indian mutual funds, insurance companies and pension funds. Foreign private-equity, venture and promoter holders (SoftBank, Tencent, Peak XV, Accel, a Dutch parent company) are not counted as FIIs: they bought before the listing, and their sales are not the portfolio flow in the daily FII figure. They show as \"foreign PE/VC\" on the other side of a deal. Everyone else (Indian promoters, trading firms, companies, individuals) is left out of this tab; the stock pages still list their deals.",
-        "Round trips: a client that bought and sold the same stock in one session to within 10% was trading, not taking a position; they are hidden unless you untick the box.",
+        "Who sold to the FII: the clients on the other side at the same price that session. When it says \"seller not in NSE's lists\", the seller's own trade didn't make NSE's lists: each seller traded under 0.5% of the company, the sale went through BSE or an offer for sale, or it was spread over many sellers. The company's stock-exchange filing (a promoter's sale must be disclosed) usually names them.",
+        "Round trips: a client that bought and sold the same stock in one session to within 10% was trading, not taking a position; they are hidden unless you untick the box, and never shown as the other side of a deal.",
         "FII price: the average price of the shown deals, restated for any split or bonus since. A stock holding above it means those buyers are in profit; one below it means they are under water.",
       ].map((t) => h("li", { text: t }))));
   }

@@ -2156,7 +2156,7 @@ def track_block(adj, eq, days, idx, symbols):
 
 
 ROUND_TRIP = 0.10  # a client who bought and sold a stock in one session to within 10% was trading it, not investing
-SAME_PRICE = 0.0025  # deals within 0.25% of each other's price on one session are taken as the two sides of one trade
+SAME_PRICE = 0.005  # deals within 0.5% of each other's price on one session are taken as the two sides of one trade
 
 
 def merge_bulk_block(rows):
@@ -2205,6 +2205,10 @@ def deals_block(deals, days, adj, eq, meta, who, asof):
         same_day.setdefault((x["d"], x["s"]), []).append(x)
     at = {}
 
+    def trading(y):
+        b, s = sides[(y["d"], y["s"], clean_name(y["cl"]).upper())]
+        return b > 0 and s > 0 and abs(b - s) <= ROUND_TRIP * max(b, s)
+
     def factor(sym, d):
         if sym not in at:
             at[sym] = {r["d"]: r["c"] for r in adj.get(sym) or []}
@@ -2218,8 +2222,10 @@ def deals_block(deals, days, adj, eq, meta, who, asof):
             continue
         me = clean_name(x["cl"]).upper()
         b, s = sides[(x["d"], x["s"], me)]
+        # The other side: opposite trades at the same price, leaving out trading firms that bought and sold the
+        # stock that session (they make markets; they are not who sold to the FII).
         other = sorted((y for y in same_day[(x["d"], x["s"])] if y["bs"] != x["bs"] and clean_name(y["cl"]).upper() != me
-                        and abs(y["p"] / x["p"] - 1) <= SAME_PRICE), key=lambda y: -y["q"])
+                        and abs(y["p"] / x["p"] - 1) <= SAME_PRICE and not trading(y)), key=lambda y: -y["q"])
         cp = [[n, who(n)] for n in dict.fromkeys(clean_name(y["cl"]) for y in other)]
         r = {"d": x["d"], "s": x["s"], "k": x["k"], "cl": clean_name(x["cl"]), "bs": x["bs"],
              "q": whole(x["q"]), "p": rnd(x["p"]), "t": t}
