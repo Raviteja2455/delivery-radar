@@ -188,18 +188,19 @@ score and rank, and the Stocks tab can be sorted by it.
 
 ## The Research tab (November 2026)
 
-A separate ₹1 lakh portfolio for holdings of six months to two years, run by a fixed rulebook. Every night the job
-screens the Nifty 500, values each quality stock, and names a pick only when one clears every check. Most nights it
-names nothing.
+Research picks for holdings of six months to two years, run by a fixed rulebook. Every night the job screens the
+Nifty 500, values each quality stock, and names every stock that clears every check, each sized at ₹1 lakh. Which
+ones to take is your call, by budget. Most nights it names nothing.
 
 **The mandate**
 
 | Item | Rule |
 |---|---|
-| Money | ₹1,00,000 in 5 equal slots of ₹20,000; cash delivery, no leverage. What isn't invested stays in cash |
+| Money | ₹1,00,000 in each pick; cash delivery, no leverage. No limit on how many picks are open: take them as your budget allows, best score first |
+| Risk | A stop on one pick costs about ₹15,000 (large cap), ₹18,000 (mid cap) or ₹22,000 (small cap). Picks in one sector tend to fall together |
 | Universe | Nifty 500. Large cap = Nifty 100, mid cap = Nifty Midcap 150, small cap = Nifty Smallcap 250 |
-| Spread | At most 2 stocks in one sector and 2 small caps |
-| Pace | At most one new pick every 14 days |
+| Pace | A stock is named on the first night it clears every check; several can be named together |
+| Limits, off by default | In `config.json`, `max_positions` caps how many picks are open, `every_days` spaces new picks out, and `max_sector` and `max_small` cap picks in one sector and in small caps. 0 means no limit |
 | Horizon | 6–12 months, or 1–2 years for a compounder (return on equity 18%+, growth 12%+, debt under 0.5× equity, Piotroski 6+) |
 
 **Step 1: quality, all six checks**
@@ -211,7 +212,7 @@ names nothing.
 | Growth | Sales up 8% a year over five years; neither sales nor earnings shrinking now | Same |
 | Strength | Piotroski score 5 of 9 or more | 5 or more analysts following it (the screen can't read bad loans) |
 | Cash | Free cash flow positive; accruals under 25% of assets | Return on assets 1% or more |
-| Tradable | ₹5 crore a day; one share fits a slot | Same |
+| Tradable | ₹5 crore a day; one share costs no more than the position | Same |
 
 **Step 2: fair value, four ways**
 
@@ -238,8 +239,9 @@ least that high. No method may count for more than twice the price. Two guards f
 | Stop: sell on a close this far below the buy price | 15% | 18% | 22% |
 
 The close must also be above the 200-day average, analysts' target must not be below the price, and no results may
-be due within three days. The pick is the highest score in the buy zone (discount 35, quality 30, growth 20,
-timing 15). Buy at the next open, but only if it opens at or below the buy-below price; otherwise the pick lapses.
+be due within three days. Picks are ordered by score (discount 35, quality 30, growth 20, timing 15). Buy at the
+next open, but only if it opens at or below the buy-below price; otherwise the pick lapses and the stock is not named
+again for two weeks.
 
 **Step 4: selling, whichever comes first**
 

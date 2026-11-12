@@ -177,11 +177,10 @@ def csv_rows(text):
         yield {h: (rec[i].strip() if i < len(rec) else "") for i, h in enumerate(header)}
 
 
-def weekdays(start, end):
+def calendar_days(start, end):
     d = start
     while d <= end:
-        if d.weekday() < 5:
-            yield d
+        yield d
         d += timedelta(days=1)
 
 
@@ -193,7 +192,11 @@ PICK_DEFAULTS = {"every_days": 10, "target_pct": 5.0, "window_days": 91, "stop_p
 # Research portfolio: 6-month to 2-year investments from the Nifty 500, bought only at a margin of safety
 # below fair value. All percentages; config.json's "research" block overrides any of them.
 RESEARCH_DEFAULTS = {
-    "pot": 100000, "max_positions": 5, "every_days": 14, "max_sector": 2, "max_small": 2,
+    # Every stock that clears every check is named on the night it qualifies, each sized at pick_size;
+    # which ones to take is the investor's call, by budget. The four limits are off at 0: max_positions
+    # caps how many picks are open at once, every_days spaces new picks out, max_sector and max_small
+    # cap picks in one sector and in small caps.
+    "pick_size": 100000, "max_positions": 0, "every_days": 0, "max_sector": 0, "max_small": 0,
     "discount_large": 20.0, "discount_mid": 25.0, "discount_small": 30.0,  # margin of safety: % below fair value needed to buy
     "stop_large": 15.0, "stop_mid": 18.0, "stop_small": 22.0,         # closing-basis stop under the buy price
     # Return demanded: the 10-year government bond yield (about 7.3% in November 2026) plus roughly
@@ -208,7 +211,8 @@ def load_config():
     cfg = jload(ROOT / "config.json", {})
     research = dict(RESEARCH_DEFAULTS)
     for k, v in (cfg.get("research") or {}).items():
-        if k in research and isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
+        off = v == 0 and k in ("max_positions", "every_days", "max_sector", "max_small")  # 0 switches a limit off
+        if k in research and isinstance(v, (int, float)) and not isinstance(v, bool) and (v > 0 or off):
             research[k] = int(v) if isinstance(RESEARCH_DEFAULTS[k], int) else float(v)
     pick = dict(PICK_DEFAULTS)
     for k, v in (cfg.get("pick") or {}).items():
@@ -609,12 +613,16 @@ def update(src, today=None):
         missing["eq"].add(iso)
         print(f"Removed eq {iso}: it repeated the previous session's file, so it was a holiday")
 
-    for kind in ("eq", "idx", "fo", "part"):  # eq first: it tells us which weekdays were holidays
-        # Newest day first, so tonight's files are in before any long backfill starts.
-        for d in reversed(list(weekdays(today - timedelta(days=LOOKBACK[kind]), today))):
+    for kind in ("eq", "idx", "fo", "part"):  # eq first: it tells us which days were trading days
+        # Newest day first, so tonight's files are in before any long backfill starts. Saturdays and
+        # Sundays are asked for too: NSE trades on some of them (Budget day, Diwali's Muhurat session),
+        # and a session left out makes the next day's move look like a split.
+        for d in reversed(list(calendar_days(today - timedelta(days=LOOKBACK[kind]), today))):
             iso = d.isoformat()
             if iso in missing[kind] or (kind != "eq" and iso in missing["eq"]):
                 continue
+            if kind != "eq" and d.weekday() >= 5 and not (DATA / "eq" / f"{iso}.json").exists():
+                continue  # a weekend with no delivery file was not a session
             path = DATA / kind / f"{iso}.json"
             if path.exists():
                 stored = jload(path, {})
@@ -705,11 +713,31 @@ def update(src, today=None):
 
 
 # ----------------------------------------------------------------------------- analytics
-def adjusted_rows(series):
+def gap_days(eq, days):
+    """Stored days that follow a session missing from the store.
+
+    After a real session, a stock's previous close matches the last stored close unless it had a
+    split or bonus. When most stocks disagree, a whole session is missing in between (not yet
+    downloaded, or never published), and the difference is that day's price move, not an adjustment."""
+    out = set()
+    for prev, d in zip(days, days[1:]):
+        n = off = 0
+        for sym, r in eq[d].items():
+            before = eq[prev].get(sym)
+            if before and before[4] and r[0]:
+                n += 1
+                off += abs(r[0] / before[4] - 1) > 0.0005
+        if n >= 20 and off > n / 2:
+            out.add(d)
+    return out
+
+
+def adjusted_rows(series, gaps=()):
     """Turn [(date, raw fields)] into dicts, back-adjusting prices and quantities for splits/bonuses.
 
     NSE's PREV_CLOSE on an ex-date is already adjusted, so a jump between it and the previous
-    day's close reveals the adjustment factor."""
+    day's close reveals the adjustment factor. Days in `gaps` follow a missing session, where that
+    jump is an ordinary price move, so no adjustment is read from them."""
     rows = [dict(zip(EQ_KEYS, raw), d=d) for d, raw in series]
     factor = 1.0
     for i in range(len(rows) - 1, -1, -1):
@@ -723,7 +751,8 @@ def adjusted_rows(series):
                     r[k] /= factor
         if i > 0:
             prev_close, prev_close_today = series[i - 1][1][4], series[i][1][0]
-            if prev_close and prev_close_today and abs(prev_close_today / prev_close - 1) > 0.02:
+            if (prev_close and prev_close_today and abs(prev_close_today / prev_close - 1) > 0.02
+                    and series[i][0] not in gaps):
                 factor *= prev_close_today / prev_close
     return rows
 
@@ -1328,6 +1357,7 @@ RESEARCH_MIN = {                 # entry checks
 RESEARCH_HOLD = {"roe": 10.0, "de": 1.5, "pio": 3}   # a holding that breaks any of these is sold
 FV_CUT = 10.0                    # ...and so is one whose fair value has been cut this much, down to the price or below
 REPICK_DAYS = 90                 # a stock sold at a loss or on failed checks is not picked again for this long
+LAPSE_DAYS = 14                  # nor is one whose pick lapsed (it opened above its buy price), for this long
 LONG_TERM = {"roe": 18.0, "growth": 12.0, "de": 0.5, "pio": 6}  # compounders get the 1-2 year horizon
 PE_CAP, LENS_CAP = 35.0, 2.0     # no method may use a P/E above 35 or put fair value above twice the price
 LONG_GROWTH = 12.0               # a 1-2 year target is fair value one year on, grown at this rate at most
@@ -1577,8 +1607,8 @@ def research_track(p, rows, asof):
 
 
 def build_research(days, adj, idx, meta, cfg, names, asof, make_picks):
-    """Screen the Nifty 500, keep the research portfolio's log up to date, and name a new pick when a
-    slot is free, one is due and a stock clears every check.
+    """Screen the Nifty 500, keep the research log up to date, and name as a new pick every stock that
+    clears every check (within any limits the settings turn on).
 
     Returns the app's "research" block and, per stock, what its own page shows."""
     R, skip = cfg["research"], cfg["research_skip"]
@@ -1595,7 +1625,7 @@ def build_research(days, adj, idx, meta, cfg, names, asof, make_picks):
     for s in n500:
         if s in large:
             capmap[s] = "L"
-    slot = R["pot"] / R["max_positions"]
+    slot = R["pick_size"]  # rupees in each pick
     idays = sorted(d for d in idx if idx[d].get("n500") or idx[d].get("nifty"))
 
     def index_on(d, key):  # index close on d, or on the last session before it
@@ -1714,37 +1744,45 @@ def build_research(days, adj, idx, meta, cfg, names, asof, make_picks):
         if now and not p.get("done"):
             p["fv_now"] = rnd(now["a"]["fv"])
 
-    # A new pick: at most one every `every_days`, only into a free slot, only if a stock clears everything,
-    # and only on a night when the fundamentals and the prices are from the same session.
+    # New picks: every stock that clears everything, best score first, within any limits the settings turn
+    # on, and only on a night when the fundamentals and the prices are from the same session.
     real = [p for p in picks if p["st"] != "lapsed"]
     open_now = [p for p in real if not p.get("done")]
     last_d = max((p["d"] for p in real), default=None)
-    due = plus_days(last_d, R["every_days"]) if last_d else asof
+    due = plus_days(last_d, R["every_days"]) if last_d and R["every_days"] else asof
     ready = bool(n500) and fresh and funnel["valued"] >= 0.5 * len(n500)
     note = None
     held = {p["s"] for p in open_now}
     # No second try at a stock that just opened above its buy price, and none soon after a losing exit.
-    recent = {p["s"] for p in picks if p["st"] == "lapsed" and p["d"] > plus_days(asof, -R["every_days"])}
+    recent = {p["s"] for p in picks if p["st"] == "lapsed" and p["d"] > plus_days(asof, -LAPSE_DAYS)}
     recent |= {p["s"] for p in real if p.get("done") and p["st"] != "target" and (p.get("xd") or p["d"]) > plus_days(asof, -REPICK_DAYS)}
     sectors = {}
     for p in open_now:
         sectors[p.get("ind", "")] = sectors.get(p.get("ind", ""), 0) + 1
     smalls = sum(1 for p in open_now if p.get("cap") == "S")
+    limit = R["max_positions"]  # 0: any number of picks may be open
+
+    def sector(s):
+        return names.get(s, {}).get("ind", "")
 
     def allowed(s):
         return (s not in held and s not in recent and s not in skip
-                and sectors.get(names.get(s, {}).get("ind", ""), 0) < R["max_sector"]
-                and not (cards[s]["cap"] == "S" and smalls >= R["max_small"]))
+                and not (R["max_sector"] and sectors.get(sector(s), 0) >= R["max_sector"])
+                and not (R["max_small"] and cards[s]["cap"] == "S" and smalls >= R["max_small"]))
 
     buyable = sorted((s for s in good if cards[s]["all"]), key=lambda s: (-cards[s]["sc"], s))
+    made = []
     if not ready:
         note = ("Fundamentals for the Nifty 500 haven't arrived or are more than a week old, so no research pick is made. "
                 "The screen resumes when the next snapshot comes in.")
-    elif make_picks and doc.get("d") == asof and asof >= due and len(open_now) < R["max_positions"]:
-        s = next((s for s in buyable if allowed(s)), None)
-        if s:
+    elif make_picks and doc.get("d") == asof and asof >= due:
+        ikey = "n500" if idx.get(asof, {}).get("n500") else "nifty"
+        for s in buyable:
+            if limit and len(open_now) >= limit:
+                break
+            if not allowed(s):
+                continue
             x, r = cards[s], row(s)
-            ikey = "n500" if idx.get(asof, {}).get("n500") else "nifty"
             new = {"d": asof, "s": s, "n": r["n"], "cap": x["cap"], "ind": r["ind"], "fin": x["fin"], "hz": r["hz"],
                    "c0": r["c"], "fv": r["fv"], "up": r["up"], "bb": r["bb"], "tgt": r["tgt"], "tgt_pct": r["tgt_pct"],
                    "stop_pct": r["stop_pct"], "days": R["long_days"] if r["hz"] == "L" else R["medium_days"],
@@ -1753,12 +1791,25 @@ def build_research(days, adj, idx, meta, cfg, names, asof, make_picks):
             picks.append(new)
             real.append(new)
             open_now.append(new)
-            due = plus_days(asof, R["every_days"])
-    if ready and not note:
-        if len(open_now) >= R["max_positions"]:
-            note = f"All {R['max_positions']} slots are in use, so no new pick is made until one closes."
-        elif not any(allowed(s) for s in buyable) and asof >= due:
-            note = "No stock clears every check tonight. Holding cash is part of the plan; the screen looks again every night."
+            made.append(s)
+            held.add(s)
+            sectors[sector(s)] = sectors.get(sector(s), 0) + 1
+            smalls += x["cap"] == "S"
+            if R["every_days"]:  # paced: one pick, then wait
+                due = plus_days(asof, R["every_days"])
+                break
+    if ready and not note and not made:
+        if limit == 1 and open_now:
+            note = (f"The money is in {open_now[0]['s']}, so no new pick is named until it is sold. "
+                    "Other stocks that reach the buy zone are still listed below.")
+        elif limit and len(open_now) >= limit:
+            note = f"All {limit} positions are in use, so no new pick is made until one closes."
+        elif asof >= due and not any(allowed(s) for s in buyable):
+            note = ("Nothing new tonight: every stock in the buy zone is already an open pick." if any(s in held for s in buyable) else
+                    "No stock clears every check tonight. Waiting is part of the plan; the screen looks again every night.")
+        elif asof >= due and doc.get("d") != asof:
+            note = ("The fundamentals and the prices are from different days, so no new pick is named from them. "
+                    "The next nightly run looks again.")
     jsave(DATA / "research.json", {"picks": sorted(picks, key=lambda p: p["d"])})
 
     done = [p for p in real if p.get("done")]
@@ -1790,6 +1841,33 @@ def build_research(days, adj, idx, meta, cfg, names, asof, make_picks):
     return block, own
 
 
+TRACK_SESSIONS = 80  # daily highs, lows and closes sent to the app: a little more than a pick's three-month window
+
+
+def track_block(adj, eq, days, idx, symbols):
+    """Each stock's recent daily high, low and close, so the app can follow trades logged on the phone.
+
+    Prices are restated for splits and bonuses, like every other series. `k` gives, for a stock that had
+    one in the window, the factor on each day that turns a price paid that day into today's shares."""
+    dates = days[-TRACK_SESSIONS:]
+    at = {d: i for i, d in enumerate(dates)}
+    series, factors = {}, {}
+    for s in symbols:
+        hi, lo, cl, k = ([None] * len(dates) for _ in range(4))
+        for x in (adj.get(s) or [])[-TRACK_SESSIONS:]:
+            i = at.get(x["d"])
+            if i is None or x["c"] is None:
+                continue
+            hi[i], lo[i], cl[i] = rnd(x["h"] or x["c"]), rnd(x["l"] or x["c"]), rnd(x["c"])
+            raw = eq[x["d"]][s][4]
+            k[i] = round(x["c"] / raw, 6) if raw else 1.0
+        if any(v is not None for v in cl):
+            series[s] = [hi, lo, cl]
+            if any(v is not None and abs(v - 1) > 1e-6 for v in k):
+                factors[s] = k
+    return {"dates": dates, "nifty": [idx.get(d, {}).get("nifty") for d in dates], "s": series, "k": factors}
+
+
 def build(make_picks=False):
     """Rebuild docs/data.json from the stored history. New picks are named only on the nightly update,
     never by a rebuild done by hand."""
@@ -1812,9 +1890,12 @@ def build(make_picks=False):
     det_days = days[-DETAIL_DAYS:]
 
     # Split-adjusted history for every stored symbol; picked stocks that left the index are in here too.
+    gaps = gap_days(eq, days)
+    if gaps:
+        print("A trading session is missing before " + ", ".join(sorted(gaps)) + "; no split is read from those days.")
     adj = {}
     for sym in sorted({s for d in days for s in eq[d]}):
-        adj[sym] = adjusted_rows([(d, eq[d][sym]) for d in days if sym in eq[d]])
+        adj[sym] = adjusted_rows([(d, eq[d][sym]) for d in days if sym in eq[d]], gaps)
     picks, tonight = build_picks(adj, days, idx, meta, cfg, names, asof, make_picks)
     research, own = build_research(days, adj, idx, meta, cfg, names, asof, make_picks)
 
@@ -1838,6 +1919,7 @@ def build(make_picks=False):
         "market": market_summary(idx, flows, stocks, asof),
         "fii": fii_activity(days, flows, part, fo, asof),
         "stocks": stocks,
+        "track": track_block(adj, eq, days, idx, [st["s"] for st in stocks]),
         "picks": picks,
         "research": research,
         "universe": "Nifty 100" if len(n100) >= 90 else "Nifty 50",
@@ -1852,7 +1934,7 @@ def build(make_picks=False):
           + (f"latest pick {newest['s']} ({newest['d']}), next due {picks['due']}" if newest else "no pick yet"))
     f, held = research["funnel"], [p for p in research["picks"] if not p.get("done")]
     print(f"Research: {f['quality']} of {f['universe']} pass the quality checks, {f['buy']} in the buy zone; "
-          + (f"holding {', '.join(p['s'] for p in held)}" if held else "no open research pick"))
+          + (f"open picks: {', '.join(p['s'] for p in held)}" if held else "no open research pick"))
 
 
 def main():

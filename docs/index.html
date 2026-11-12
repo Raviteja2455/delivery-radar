@@ -193,10 +193,14 @@ td.hi { color: var(--deliv); font-weight: 600; }
 .near-row .miss { color: var(--ink-2); font-size: 13.5px; }
 .pos { padding: 12px 0; border-top: 1px solid var(--rule); }
 .pos:first-of-type { border-top: 0; padding-top: 2px; }
-.pos .r1 { align-items: center; }
+.pos .r1 { align-items: center; flex-wrap: wrap; row-gap: 2px; }
 .act { border-radius: 6px; padding: 1px 8px; font-size: 13px; font-weight: 600; }
 .act.hold { background: var(--paper); color: var(--up); }
 .act.exit { background: var(--down); color: #fff; }
+.act.tgt { background: var(--up); color: #fff; }
+.pos > details { margin-top: 8px; }
+.pos > details > summary { cursor: pointer; color: var(--deliv); font-weight: 500; font-size: 13.5px; }
+.pos > details .tbl { margin-top: 8px; }
 .pos .line { font-size: 13.5px; color: var(--ink-2); margin: 4px 0 0; }
 .pos .line b { color: var(--ink); font-weight: 600; }
 .form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
@@ -315,8 +319,8 @@ td.hi { color: var(--deliv); font-weight: 600; }
         <ol id="sig-help"></ol>
         <p>The live strip shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR, with MCX gold (₹ per 10 g) and silver (₹ per kg) below, refreshed every 20 seconds while the app is open. A green dot means that market is trading now. GIFT Nifty, USD/INR and MCX are real time; crude runs 10 minutes behind. Each uses its most-traded contract, named after the label. When MCX trading moves to the next month ahead of expiry, the label changes month and the price shifts by the gap between the two contracts. Outside NSE hours the line under the strip compares GIFT Nifty with the close of the Nifty futures for the same month, which is the usual read on how the next session will open.</p>
         <p>The band at the top sets the size of swing trades. All of them are in cash, with no MTF. Green (an uptrend) means half size, because breakouts taken in green markets did worst in the 2020–26 backtests; amber and red mean full size. The Swing tab runs the full entry, sizing and exit rules on every stock and explains the evidence under <i>The rules this tab applies</i>.</p>
-        <p>The Picks tab ranks every Nifty 100 stock each night and names one three-month swing pick every ten days, aiming for at least +5%. It then tracks every pick, and a replay of the same rule on past data, so you can see how often the target was reached. The Swing tab stays on the Nifty 50, the stocks its plan was tested on.</p>
-        <p>The Research tab screens the Nifty 500 (large, mid and small caps) for investments of six months to two years. It keeps only profitable, well-financed, growing companies, works out a fair value four ways, and names a stock only when the price is well below it and no longer falling. It sizes a ₹1 lakh portfolio in five equal slots and follows every pick to its exit. Most nights it names nothing: waiting for price is part of the method.</p>
+        <p>The Picks tab ranks every Nifty 100 stock each night and names one three-month swing pick every ten days, aiming for at least +5%. It then tracks every pick, and a replay of the same rule on past data, so you can see how often the target was reached. The Swing tab stays on the Nifty 50, the stocks its plan was tested on. Log the picks you buy there, like trades on the Swing tab: every nightly update refreshes each one's gain and says when the rule would sell.</p>
+        <p>The Research tab screens the Nifty 500 (large, mid and small caps) for investments of six months to two years. It keeps only profitable, well-financed, growing companies, works out a fair value four ways, and names a stock only when the price is well below it and no longer falling. It names every stock that qualifies, each sized at ₹1 lakh, and follows every pick to its exit; which ones you take depends on your budget. Most nights it names nothing: waiting for price is part of the method.</p>
         <p>FII activity, inside the band, shows each session's net cash buying or selling by foreign investors (NSE's provisional figure) and how their index futures, calls and puts changed, from NSE's participant-wise open interest. A positive futures or calls number, or a negative puts number, is the bullish side. The verdict under the table weighs the latest day's cash, futures and options: when they all agree it says bullish or bearish, otherwise it leans with the majority. On Nifty's weekly expiry (marked *), option changes include contracts that simply expired. The tile beside VIX shows how much of FIIs' index-futures position is long.</p>
       </div>
     </details>
@@ -745,12 +749,17 @@ td.hi { color: var(--deliv); font-weight: 600; }
     if ((b.plan || 1) < PLAN) { s.maxLev = DEFAULTS.maxLev; s.stopMax = DEFAULTS.stopMax; }
     return s;
   };
+  // Trades logged on the Picks tab live in the same saved book, so one backup covers both tabs.
+  function pkFrom(b) {
+    const k = b && b.pk;
+    return { positions: k && Array.isArray(k.positions) ? k.positions : [], closed: k && Array.isArray(k.closed) ? k.closed : [] };
+  }
   const book = (() => {
     let b = {};
     try { b = JSON.parse(localStorage.getItem(BOOK_KEY) || "{}") || {}; } catch { b = {}; }
     return { plan: PLAN, settings: settingsFrom(b),
       positions: Array.isArray(b.positions) ? b.positions : [],
-      closed: Array.isArray(b.closed) ? b.closed : [], killUntil: b.killUntil || null };
+      closed: Array.isArray(b.closed) ? b.closed : [], killUntil: b.killUntil || null, pk: pkFrom(b) };
   })();
   const saveBook = () => { try { localStorage.setItem(BOOK_KEY, JSON.stringify(book)); } catch { /* private mode */ } };
   const S = () => book.settings;
@@ -1050,6 +1059,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
   function backupCard() {
     const ta = h("textarea", { rows: "4", placeholder: "Paste a backup here to restore it" });
     return h("details", { class: "card" }, h("summary", { text: "Back up or move your trades" }),
+      h("p", { class: "note", style: "margin-top:0", text: "One backup holds your swing trades, your Picks-tab trades and your settings." }),
       h("div", { class: "form" },
         h("div", { class: "actions" },
           h("button", { class: "btn small", type: "button", text: "Copy backup", onclick: async (e) => {
@@ -1064,7 +1074,8 @@ td.hi { color: var(--deliv); font-weight: 600; }
               book.positions = b.positions;
               book.closed = Array.isArray(b.closed) ? b.closed : [];
               book.killUntil = b.killUntil || null;
-              saveBook(); renderMTF(); updateTabCount();
+              book.pk = pkFrom(b);
+              saveBook(); renderMTF(); updateTabCount(); updatePickCount();
             } catch { alert("That isn't a Delivery Radar backup."); }
           } })),
         h("label", { class: "wide" }, "Backup text", ta)));
@@ -1169,7 +1180,9 @@ td.hi { color: var(--deliv); font-weight: 600; }
       owned ? h("p", { class: "note", text: "You already own this stock (it's in your Swing holdings), so buying it adds to that position." }) : null,
       h("details", { style: "margin-top:10px" }, h("summary", { style: "cursor:pointer;color:var(--deliv);font-weight:500;font-size:14px", text: "Why this stock" }),
         h("div", { style: "margin-top:10px" }, whyBlock(p.why, p.c))),
-      h("div", { class: "btns" }, st ? h("button", { class: "btn small ghost", type: "button", text: "Stock details", onclick: () => openStock(p.s) }) : null));
+      h("div", { class: "btns" },
+        st && (p.st === "new" || p.st === "open") ? h("button", { class: "btn small", type: "button", text: "Log this trade", onclick: () => pkLog(p.s) }) : null,
+        st ? h("button", { class: "btn small ghost", type: "button", text: "Stock details", onclick: () => openStock(p.s) }) : null));
   }
   function nextPickLine(P) {
     const latest = P.list.find((x) => x.src === "live");
@@ -1268,11 +1281,193 @@ td.hi { color: var(--deliv); font-weight: 600; }
     ];
     return h("details", { class: "card" }, h("summary", { text: "The pick rule" }), h("ol", { class: "rules" }, items.map((x) => h("li", { text: x }))));
   }
+  // ---------------------------------------------------------------- picks: your own trades (saved on this device)
+  // A trade logged here is kept in this browser with the swing book. Every nightly file carries each
+  // stock's daily high, low and close for the last 80 sessions, so a logged trade is worked out afresh
+  // from its buy date each time: the gain, the best and worst point, whether the day's high touched the
+  // target or a close broke the stop, and the days left.
+  let pkPrefill = null;
+  const pkLog = (sym) => { pkPrefill = sym; renderPicks(true); document.getElementById("pk-add")?.scrollIntoView(); };
+  function pkTrack(p) {
+    const T = DATA.track, ser = T && T.s[p.sym];
+    const out = { rows: [], started: false, last: null, gain: null, net: null, day: null, best: null, worst: null, hit: null, stopped: null, vs: null,
+      e: p.entry, q: p.qty, tgt: p.tgt || null, stop: p.stop || null,
+      heldDays: Math.max(0, daysBetween(p.date, DATA.asof)), sellBy: addDays(p.date, p.days) };
+    if (!ser) return out;
+    const [hi, lo, cl] = ser, dates = T.dates;
+    const i0 = dates.findIndex((d) => d >= p.date);
+    if (i0 < 0) return out;  // bought after the last nightly file
+    // A split or bonus since the buy: restate the trade in today's shares.
+    const k = T.k && T.k[p.sym] ? (T.k[p.sym].slice(i0).find((x) => x != null) ?? 1) : 1;
+    const e = p.entry * k, q = p.qty / k;
+    Object.assign(out, { e, q, tgt: p.tgt ? p.tgt * k : null, stop: p.stop ? p.stop * k : null, partial: dates[0] > p.date });
+    let prev = e, best = e, worst = e;
+    for (let i = i0; i < dates.length; i++) {
+      const c = cl[i];
+      if (c == null) continue;
+      const buyDay = dates[i] === p.date;  // on the day you bought, only the close counts: the high may have come before your order
+      const top = buyDay ? c : hi[i] ?? c, bottom = buyDay ? c : lo[i] ?? c;
+      best = Math.max(best, top); worst = Math.min(worst, bottom);
+      if (!out.hit && out.tgt && top >= out.tgt) out.hit = dates[i];
+      if (!out.stopped && out.stop && c <= out.stop) out.stopped = dates[i];
+      out.rows.push({ d: dates[i], c, day: (c / prev - 1) * 100, pnl: (c - e) * q, pct: (c / e - 1) * 100 });
+      prev = c;
+    }
+    if (!out.rows.length) return out;
+    const n = out.rows.length, lastRow = out.rows[n - 1], ch = charges(e * q, 0, out.heldDays);
+    Object.assign(out, { started: true, last: lastRow.c, gain: lastRow.pct, ch, net: lastRow.pnl - ch.total,
+      day: lastRow.d === DATA.asof ? (n > 1 ? (lastRow.c - out.rows[n - 2].c) * q : lastRow.pnl) : 0,
+      best: (best / e - 1) * 100, worst: (worst / e - 1) * 100 });
+    const n0 = T.nifty[i0], n1 = T.nifty[T.nifty.length - 1];
+    if (n0 && n1) out.vs = lastRow.pct - (n1 / n0 - 1) * 100;
+    return out;
+  }
+  // What the pick rule says to do with a logged trade tonight.
+  function pkAction(p, t) {
+    if (!t.started) return { act: "Hold", cls: "hold", exit: false,
+      why: p.date > DATA.asof ? "Bought after the last nightly update. Its numbers start with tonight's." : "This stock isn't in tonight's file, so it can't be followed." };
+    if (t.hit) return { act: "Target", cls: "tgt", exit: true,
+      why: `The day's high reached your target of ${rupees(t.tgt)} on ${shortDate(t.hit)}. The rule sells there. If you still hold it, sell and record the exit.` };
+    if (t.stopped) return { act: "Exit", cls: "exit", exit: true,
+      why: `It closed at or below your stop of ${rupees(t.stop)} on ${shortDate(t.stopped)}. Sell at the next open.` };
+    if (DATA.asof >= t.sellBy) return { act: "Exit", cls: "exit", exit: true, why: `Time is up: ${p.days} days since you bought. Sell at the next open.` };
+    const parts = [`Day ${t.heldDays} of ${p.days}.`];
+    if (t.tgt) parts.push(`Target ${rupees(t.tgt)} is ${fmt((t.tgt / t.last - 1) * 100, 1)}% away.`);
+    if (t.stop) parts.push(`Stop ${rupees(t.stop)} is ${fmt((1 - t.stop / t.last) * 100, 1)}% below.`);
+    return { act: "Hold", cls: "hold", exit: false, why: parts.join(" ") };
+  }
+  function pkCloseControls(p, t) {
+    const B = book.pk;
+    const form = h("div", { class: "form", hidden: true, style: "margin-top:10px" });
+    const exitP = h("input", { type: "number", step: "0.05", inputmode: "decimal", value: t.hit && t.tgt ? t.tgt.toFixed(2) : t.last ?? t.e });
+    const exitD = h("input", { type: "date", value: t.hit || DATA.asof });
+    const done = () => { saveBook(); renderPicks(true); updatePickCount(); };
+    form.append(h("label", {}, "Sold at", exitP), h("label", {}, "Sold on", exitD),
+      h("div", { class: "actions" },
+        h("button", { class: "btn small", type: "button", text: "Save exit", onclick: () => {
+          const x = Number(exitP.value), when = exitD.value || DATA.asof;
+          if (!(x > 0)) return;
+          const cost = t.e * t.q, ch = charges(cost, 0, daysBetween(p.date, when)), net = (x - t.e) * t.q - ch.total;
+          B.closed.push({ ...p, entry: t.e, qty: t.q, exit: x, exitDate: when, net, ret: net / cost * 100,
+            why: t.hit && when >= t.hit ? "target" : t.stopped && when >= t.stopped ? "stop" : when >= t.sellBy ? "time" : "early" });
+          B.positions = B.positions.filter((x) => x.id !== p.id);
+          done();
+        } }),
+        h("button", { class: "btn small ghost", type: "button", text: "Delete entry", onclick: () => {
+          if (confirm(`Delete the ${p.sym} trade from this list without recording an exit?`)) { B.positions = B.positions.filter((x) => x.id !== p.id); done(); }
+        } })));
+    return h("div", { style: "margin-top:8px" },
+      h("button", { class: "btn small ghost", type: "button", text: "Close trade", onclick: () => { form.hidden = !form.hidden; } }), form);
+  }
+  function pkPositionsCard() {
+    const B = book.pk, open = B.positions.map((p) => [p, pkTrack(p)]);
+    const card = h("section", { class: "card", id: "pk-positions" }, h("h3", { text: `Your pick trades (${open.length} open)` }));
+    if (!open.length && !B.closed.length) {
+      card.append(h("p", { class: "note", style: "margin-top:0", text: "Nothing logged yet. When you buy a pick, log it with the form below. Every nightly update then refreshes its gain, its best and worst point, and whether the target, the stop or the time limit says to sell." }));
+      return card;
+    }
+    const live = open.filter(([, t]) => t.started);
+    const invested = open.reduce((a, [, t]) => a + t.e * t.q, 0), cost = live.reduce((a, [, t]) => a + t.e * t.q, 0);
+    const today = live.reduce((a, [, t]) => a + t.day, 0), openNet = live.reduce((a, [, t]) => a + t.net, 0);
+    const booked = B.closed.reduce((a, c) => a + (c.net || 0), 0), wins = B.closed.filter((c) => c.net > 0).length;
+    card.append(h("div", { class: "figs" },
+      fig("Invested", rupeesShort(invested), null, `${open.length} open`),
+      fig("Today", live.length ? rupees(today, 0) : "–", null, `on ${shortDate(DATA.asof)}`),
+      fig("Open P&L", live.length ? rupees(openNet, 0) : "–", null, cost ? `${signed(openNet / cost * 100, 1)}, after charges` : "no prices yet"),
+      fig("Booked", B.closed.length ? rupees(booked, 0) : "–", null, B.closed.length ? `${wins} of ${B.closed.length} made money` : "none closed")));
+    for (const [p, t] of open) {
+      const a = pkAction(p, t);
+      const facts = [`${fmt(t.q, Number.isInteger(t.q) ? 0 : 2)} shares at ${rupees(t.e)} on ${shortDate(p.date)}`,
+        t.tgt ? `target ${rupees(t.tgt)}` : null, t.stop ? `stop ${rupees(t.stop)} on a close` : null, `sell by ${longDate(t.sellBy)}`].filter(Boolean).join(" · ");
+      card.append(h("div", { class: "pos" },
+        h("div", { class: "r1" },
+          h("span", { class: "sym", text: p.sym }), h("span", { class: "act " + a.cls, text: a.act }),
+          h("span", { class: "px", text: t.last != null ? rupees(t.last) : "no price yet" }),
+          h("span", { class: "chg " + dir(t.gain), text: signed(t.gain) })),
+        h("p", { class: "line", text: a.why }),
+        h("p", { class: "line", text: facts }),
+        t.started ? h("p", { class: "line" }, "Net ", h("b", { text: rupees(t.net, 0) }), ` after ${rupees(t.ch.total, 0)} in charges · today `, h("b", { text: rupees(t.day, 0) }),
+          ` · best ${signed(t.best, 1)}, worst ${signed(t.worst, 1)}` + (t.vs != null ? ` · ${signed(t.vs, 1)} vs Nifty 50` : "")) : null,
+        t.partial ? h("p", { class: "line", text: `Followed from ${shortDate(DATA.track.dates[0])}: older days aren't in the nightly file.` }) : null,
+        t.rows.length ? h("details", {}, h("summary", { text: `Day by day (${t.rows.length} session${t.rows.length > 1 ? "s" : ""})` }),
+          h("div", { class: "tbl" }, h("table", {},
+            h("thead", {}, h("tr", {}, ["Date", "Close", "Day", "P&L", "Since buy"].map((x) => h("th", { scope: "col", text: x })))),
+            h("tbody", {}, [...t.rows].reverse().map((r) => h("tr", {},
+              h("td", { text: shortDate(r.d) }), h("td", { text: price(r.c) }),
+              h("td", { class: dir(r.day), text: signed(r.day) }),
+              h("td", { class: dir(r.pnl), text: rupees(r.pnl, 0) }),
+              h("td", { class: dir(r.pct), text: signed(r.pct) }))))))) : null,
+        pkCloseControls(p, t)));
+    }
+    if (B.closed.length) {
+      const n = B.closed.length, avgRet = B.closed.reduce((a, c) => a + (c.ret || 0), 0) / n;
+      const label = { target: "Target", stop: "Stop", time: "Time up", early: "Sold early" };
+      card.append(h("details", { style: "margin-top:12px" + (open.length ? ";border-top:1px solid var(--rule);padding-top:10px" : "") },
+        h("summary", { style: "cursor:pointer;font-weight:600;font-size:14.5px", text: `Closed trades (${n}): net ${rupees(booked, 0)}, average ${signed(avgRet, 1)}` }),
+        h("div", { class: "tbl", style: "margin-top:8px" }, h("table", { class: "pk-tbl" },
+          h("thead", {}, h("tr", {}, ["Stock", "Bought", "Sold", "Net", "Return", "Days", "Exit"].map((x) => h("th", { scope: "col", text: x })))),
+          h("tbody", {}, [...B.closed].reverse().map((c) => h("tr", {},
+            h("td", {}, c.sym, h("small", { text: `${fmt(c.qty, Number.isInteger(c.qty) ? 0 : 2)} shares` })),
+            h("td", {}, price(c.entry), h("small", { text: shortDate(c.date) })),
+            h("td", {}, price(c.exit), h("small", { text: shortDate(c.exitDate) })),
+            h("td", { class: dir(c.net), text: rupees(c.net, 0) }),
+            h("td", { class: dir(c.ret), text: signed(c.ret) }),
+            h("td", { text: String(daysBetween(c.date, c.exitDate)) }),
+            h("td", { text: label[c.why] || "–" }))))))));
+    }
+    return card;
+  }
+  function pkFormCard(P) {
+    const r = P.rules, live = P.list.find((x) => x.src === "live" && (x.st === "new" || x.st === "open"));
+    const sel = h("select", {}, DATA.stocks.map((st) => h("option", { value: st.s, text: st.s })));
+    const date = h("input", { type: "date", value: todayIST(), max: todayIST() });
+    const entry = h("input", { type: "number", step: "0.05", inputmode: "decimal" });
+    const q = h("input", { type: "number", step: "1", min: "1", inputmode: "numeric" });
+    const tgt = h("input", { type: "number", step: "0.05", inputmode: "decimal" });
+    const stop = h("input", { type: "number", step: "0.05", inputmode: "decimal" });
+    const worth = h("p", { class: "note wide", style: "margin:0" });
+    let auto = true;  // the target and stop follow the price paid until you type your own
+    const levels = () => {
+      const e = Number(entry.value), n = Math.floor(Number(q.value));
+      if (auto && e > 0) { tgt.value = (e * (1 + r.target_pct / 100)).toFixed(2); stop.value = (e * (1 - r.stop_pct / 100)).toFixed(2); }
+      const sl = Number(stop.value);
+      worth.textContent = e > 0 && n > 0 ? `Position ${rupees(e * n, 0)}.` + (sl > 0 && sl < e ? ` A close at the stop loses about ${rupees((e - sl) * n, 0)}.` : "") : "";
+    };
+    const fill = () => {
+      const st = DATA.stocks.find((x) => x.s === sel.value), pick = live && live.s === sel.value ? live : null;
+      entry.value = pick && pick.e ? pick.e : st ? st.c : "";
+      date.value = pick && pick.ed ? pick.ed : todayIST();
+      auto = true; levels();
+    };
+    sel.addEventListener("change", fill);
+    entry.addEventListener("input", levels); q.addEventListener("input", levels);
+    tgt.addEventListener("input", () => { auto = false; }); stop.addEventListener("input", () => { auto = false; levels(); });
+    const first = pkPrefill || (live && live.s);
+    if (first && DATA.stocks.some((x) => x.s === first)) sel.value = first;
+    fill();
+    return h("section", { class: "card", id: "pk-add" }, h("h3", { text: "Log a trade" }),
+      h("div", { class: "form" },
+        h("label", {}, "Stock", sel), h("label", {}, "Bought on", date),
+        h("label", {}, "Price paid", entry), h("label", {}, "Quantity", q),
+        h("label", {}, `Target (+${plain(r.target_pct)}%)`, tgt), h("label", {}, `Stop, closing basis (${MINUS}${plain(r.stop_pct)}%)`, stop),
+        worth,
+        h("div", { class: "actions" }, h("button", { class: "btn", type: "button", text: "Add trade", onclick: () => {
+          const st = DATA.stocks.find((x) => x.s === sel.value);
+          const rec = { id: Date.now().toString(36), sym: sel.value, date: date.value || todayIST(), entry: Number(entry.value), qty: Math.floor(Number(q.value)),
+            tgt: Number(tgt.value) || null, stop: Number(stop.value) || null, days: r.window_days, sector: st ? st.ind : "" };
+          if (!(rec.entry > 0) || !(rec.qty > 0)) { alert("Enter the price paid and the quantity."); return; }
+          book.pk.positions.push(rec);
+          saveBook(); pkPrefill = null; renderPicks(true); updatePickCount();
+          document.getElementById("pk-positions")?.scrollIntoView();
+        } }))),
+      h("p", { class: "note", text: `Trades are saved in this browser on this phone only; they never go to GitHub, and the Swing tab's backup includes them. The app follows each one by the pick rule: sell at the target, on a close at the stop, or after ${r.window_days} days. Its numbers refresh with every nightly update.` }));
+  }
   function updatePickCount() {
     const p = DATA.picks && DATA.picks.list.find((x) => x.src === "live");
     const el = $("#picks-count"), fresh = !!(p && p.st === "new");
-    el.textContent = fresh ? "•" : "";
-    fresh ? el.setAttribute("aria-label", "new pick") : el.removeAttribute("aria-label");
+    const sell = book.pk.positions.filter((x) => pkAction(x, pkTrack(x)).exit).length;  // logged trades the rule says to sell
+    el.textContent = sell ? "!" : fresh ? "•" : "";
+    sell ? el.setAttribute("aria-label", `${sell} logged trade${sell > 1 ? "s" : ""} to sell`) : fresh ? el.setAttribute("aria-label", "new pick") : el.removeAttribute("aria-label");
   }
   function renderPicks(keepScroll) {
     const V = $("#picks-view"), P = DATA.picks, y = window.scrollY;
@@ -1282,14 +1477,14 @@ td.hi { color: var(--deliv); font-weight: 600; }
       return;
     }
     if (!pstate.group) pstate.group = P.stats.live.closed || !P.stats.bt.n ? "live" : "bt";
-    V.replaceChildren(...[latestPickCard(P), nextPickLine(P), rankCard(P), performanceCard(P), screenerCard(P), pickRulesCard(P),
+    V.replaceChildren(...[latestPickCard(P), nextPickLine(P), pkPositionsCard(), pkFormCard(P), rankCard(P), performanceCard(P), screenerCard(P), pickRulesCard(P),
       h("p", { class: "foot", text: "Picks come from a fixed rule run on NSE's closing data. They are not personal advice and say nothing about your own position size. For information only, not investment advice." })].filter(Boolean));
     if (keepScroll) window.scrollTo(0, y);
   }
 
   // ---------------------------------------------------------------- research: 6-month to 2-year investments
   // The nightly job screens the Nifty 500 on fundamentals, values each stock four ways and keeps a
-  // five-slot portfolio's log. Everything shown here comes from the data file; nothing is stored on the phone.
+  // research portfolio's log. Everything shown here comes from the data file; nothing is stored on the phone.
   const rstate = { status: "all" };
   let researchScroll = 0;
   const CAP = { L: "Large cap", M: "Mid cap", S: "Small cap" };
@@ -1316,7 +1511,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
       growth: `Sales growing ${plain(m.growth)}% a year, and not shrinking now`,
       strength: x.fin ? `Followed by ${m.analysts} or more analysts` : `Piotroski strength score ${m.pio} of 9 or more`,
       cash: x.fin ? "Return on assets 1% or more" : `Profit turns into free cash; accruals under ${plain(m.sloan)}% of assets`,
-      liquid: `Trades ₹${plain(m.turnover_cr)} cr a day; one share fits a slot`,
+      liquid: `Trades ₹${plain(m.turnover_cr)} cr a day; one share costs no more than the position`,
       value: `Price ${plain(x.mos)}% or more below fair value`,
       trend: "Close above the 200-day average",
       street: "Analysts' target not below the price",
@@ -1328,7 +1523,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
       growth: `5 years: sales ${signed(x.rev_c5, 1)} a year${x.eps_c5 != null ? `, earnings ${signed(x.eps_c5, 1)}` : ""}. Last 12 months: sales ${signed(x.rev_g, 1)}, earnings ${signed(x.eps_g, 1)}`,
       strength: x.fin ? `${x.street_n ?? 0} analysts. The screen can't read bad loans, so it wants a stock others examine` : x.pio != null ? `${x.pio} of 9` : "no score published",
       cash: x.fin ? `${fmt(x.roa, 2)}%` : (x.cash != null ? `Free cash flow is ${fmt(x.cash, 2)}× net profit` : "Positive operating cash flow") + (x.sloan != null ? `; accruals ${fmt(x.sloan, 1)}% of assets` : ""),
-      liquid: `Median turnover ₹${fmt(x.turn, 1)} cr a day; price ${rupees(x.c)} vs slot ${rupees(R.slot, 0)}`,
+      liquid: `Median turnover ₹${fmt(x.turn, 1)} cr a day; price ${rupees(x.c)} vs position ${rupees(R.slot, 0)}`,
       value: `${rupees(x.c)} is ${x.fv > x.c ? `${fmt((1 - x.c / x.fv) * 100, 0)}% below` : `${fmt((x.c / x.fv - 1) * 100, 0)}% above`} fair value of ${rupees(x.fv)}. Buy below ${rupees(x.bb)}`,
       trend: `${rupees(x.c)} vs ${rupees(x.sma200)}`,
       street: x.street_n >= m.analysts ? `${rupees(x.street)} (${x.street_n} analysts)` : "Too few analysts; not applied",
@@ -1379,7 +1574,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
       h("div", { class: "pk-head" }, rsTag(p.st), h("span", { class: "tag cap", style: "margin:0", text: CAP[p.cap] }), h("span", { class: "tag", text: HORIZON[p.hz] }),
         h("span", { class: "note", style: "margin:0", text: `Picked on the ${shortDate(p.d)} close · score ${fmt(p.sc, 0)}` })),
       h("div", { class: "plan" }, grid),
-      isNew ? h("p", { class: "note", text: `Reward to risk ${fmt(p.tgt_pct / p.stop_pct, 1)} to 1. If it opens above ${rupees(p.bb, 0)}, don't chase it: the pick lapses. The screen reads published numbers only, so check the latest results and news before you buy.` })
+      isNew ? h("p", { class: "note", text: `Reward to risk ${fmt(p.tgt_pct / p.stop_pct, 1)} to 1; a stop costs about ${rupees(qty * base * p.stop_pct / 100, 0)}. If it opens above ${rupees(p.bb, 0)}, don't chase it: the pick lapses. The screen reads published numbers only, so check the latest results and news before you buy.` })
             : !done ? h("p", { class: "note", text: `Sell on a close at or above ${rupees(target, 0)} or at or below ${rupees(stop, 0)}. The tab also tells you to sell if the business stops passing its checks or its fair value is cut down to the price.` }) : null,
       p.note ? h("p", { class: "note", text: `Sold because ${p.note}.` }) : null,
       owned ? h("p", { class: "note", text: "You already own this stock (it's in your Swing holdings), so this adds to it." }) : null,
@@ -1405,15 +1600,30 @@ td.hi { color: var(--deliv); font-weight: 600; }
     const invested = open.reduce((a, p) => a + cost(p), 0);
     const gain = open.reduce((a, p) => a + cost(p) * (p.ret || 0) / 100, 0);
     const booked = closed.reduce((a, p) => a + cost(p) * (p.ret || 0) / 100, 0);
-    const pot = R.rules.pot, total = gain + booked;
+    const any = !R.rules.max_positions, one = R.rules.max_positions === 1;   // no limit on open picks, or one at a time
+    const pot = R.slot * (R.rules.max_positions || 1), total = gain + booked;
     const fd = R.fund_d ? shortDate(R.fund_d) : null;
     const why = [
-      `${rupeesShort(pot)} in ${R.rules.max_positions} equal slots of ${rupees(R.slot, 0)}. What isn't invested stays in cash.`,
+      any ? `Every stock that clears every check is named that night, each sized at ${rupeesShort(R.slot)}. Take them as your budget allows.`
+      : one ? `${rupeesShort(pot)} goes into one stock at a time. Until a stock clears every check, it stays in cash.`
+          : `${rupeesShort(pot)} in ${R.rules.max_positions} equal parts of ${rupees(R.slot, 0)}. What isn't invested stays in cash.`,
       fd ? `Fundamentals as of ${fd}, for ${R.funnel.data} of ${R.funnel.universe} ${R.universe} stocks.` : "No fundamentals have arrived yet.",
-      R.note || (R.due > DATA.asof && open.length < R.rules.max_positions ? `Next pick: the first night on or after ${longDate(R.due)} that a stock clears every check.` : null),
+      R.note || (R.due > DATA.asof && (any || open.length < R.rules.max_positions) ? `Next pick: the first night on or after ${longDate(R.due)} that a stock clears every check.` : null),
     ].filter(Boolean);
+    if (any) {  // each pick stands alone, so show the picks, not a pot
+      const held = open.filter((p) => p.st === "open");
+      return h("section", { class: "regime", "data-r": R.ready ? (open.length ? "green" : "amber") : "red" },
+        h("p", { class: "verdict" }, h("b", { text: open.length ? String(open.length) : "No" }), ` research pick${open.length === 1 ? "" : "s"} open`),
+        h("ul", { class: "why" }, why.map((t) => h("li", { text: t }))),
+        h("div", { class: "figs" },
+          fig("Open picks", String(open.length), null, open.length ? `${rupeesShort(invested)} to hold all` : "none yet"),
+          fig("Open gain", held.length ? signed(R.stats.open_avg, 1) : "–", null, held.length ? `${rupees(gain, 0)} on all` : "nothing held"),
+          fig("Closed", String(closed.length), null, closed.length ? `${R.stats.target} at target` : "none yet"),
+          fig("Avg result", closed.length ? signed(R.stats.avg, 1) : "–", null, closed.length ? `${rupees(booked, 0)} on all` : "closed picks")));
+    }
     return h("section", { class: "regime", "data-r": R.ready ? (open.length ? "green" : "amber") : "red" },
-      h("p", { class: "verdict" }, h("b", { text: `${open.length} of ${R.rules.max_positions}` }), " research slots in use"),
+      one ? h("p", { class: "verdict" }, h("b", { text: open.length ? open[0].s : "In cash" }), open.length ? " is the research holding" : ": no research pick open")
+          : h("p", { class: "verdict" }, h("b", { text: `${open.length} of ${R.rules.max_positions}` }), " research positions in use"),
       h("ul", { class: "why" }, why.map((t) => h("li", { text: t }))),
       h("div", { class: "figs" },
         fig("Invested", rupeesShort(invested), null, `${open.length} stock${open.length === 1 ? "" : "s"}`),
@@ -1471,10 +1681,15 @@ td.hi { color: var(--deliv); font-weight: 600; }
     return card;
   }
   function researchRules(R) {
-    const r = R.rules, m = R.min, hd = R.hold, lt = R.long;
+    const r = R.rules, m = R.min, hd = R.hold, lt = R.long, pot = R.slot * (r.max_positions || 1);
+    const scoring = "The score weighs the discount to fair value (35), quality (30), growth (20) and timing (15).";
     const items = [
-      `Mandate. A separate ${rupeesShort(r.pot)} portfolio for holdings of six months to two years, beside your index fund and long-term shares, not instead of them. Cash delivery only, no leverage. At most ${r.max_positions} stocks of ${rupees(R.slot, 0)} each, no more than ${r.max_sector} in one sector and ${r.max_small} small caps. Cash is a position: nothing is bought just to be invested.`,
-      `Universe. The ${R.universe}: large caps are the Nifty 100, mid caps the Nifty Midcap 150, small caps the Nifty Smallcap 250. A stock must trade ₹${plain(m.turnover_cr)} cr a day and one share must fit a slot.`,
+      !r.max_positions
+        ? `Mandate. Research picks for holdings of six months to two years, beside your index fund and long-term shares, not instead of them. Cash delivery only, no leverage. Every stock that clears every check is named on the night it qualifies, each sized at ${rupees(R.slot, 0)}. There is no limit on how many are open: take them as your budget allows, best score first. A stop on one pick costs about ${rupees(R.slot * r.stop_large / 100, 0)} on a large cap, ${rupees(R.slot * r.stop_mid / 100, 0)} on a mid cap and ${rupees(R.slot * r.stop_small / 100, 0)} on a small cap. Picks in one sector tend to fall together, so look at the sector before adding a second from it.`
+        : r.max_positions === 1
+        ? `Mandate. ${rupeesShort(pot)} for one holding of six months to two years, beside your index fund and long-term shares, not instead of them. Cash delivery only, no leverage. The whole amount goes into one stock at a time, and no second pick is named until it is sold. Until a stock clears every check, the money stays in cash. With everything in one stock, a stop costs about ${rupees(pot * r.stop_large / 100, 0)} on a large cap, ${rupees(pot * r.stop_mid / 100, 0)} on a mid cap and ${rupees(pot * r.stop_small / 100, 0)} on a small cap.`
+        : `Mandate. A separate ${rupeesShort(pot)} portfolio for holdings of six months to two years, beside your index fund and long-term shares, not instead of them. Cash delivery only, no leverage. At most ${r.max_positions} stocks of ${rupees(R.slot, 0)} each, no more than ${r.max_sector} in one sector and ${r.max_small} small caps. Cash is a position: nothing is bought just to be invested.`,
+      `Universe. The ${R.universe}: large caps are the Nifty 100, mid caps the Nifty Midcap 150, small caps the Nifty Smallcap 250. A stock must trade ₹${plain(m.turnover_cr)} cr a day and one share must cost no more than the position.`,
       `Quality first, all six. (1) Return on equity ${plain(m.roe)}% or more, ${plain(m.roe_fin)}% for financial companies. (2) Debt no more than ${plain(m.de)}× equity (${plain(m.de_small)}× for small caps) with interest covered ${plain(m.icov)}×. (3) Sales growing ${plain(m.growth)}% a year over five years, and neither sales nor earnings shrinking now. (4) A Piotroski strength score of ${m.pio} of 9 or more; a financial company must instead be followed by ${m.analysts} or more analysts, because the screen can't read bad loans. (5) Profit that turns into free cash, with accruals under ${plain(m.sloan)}% of assets; for financial companies, return on assets of 1% or more. (6) Enough turnover.`,
       "Never value a boom year. Earnings used are the last twelve months', but no more than last year's grown at the long-run rate, and no more than analysts expect next year. Return on equity is cut by the same amount. This keeps refiners, metal makers and lenders at the top of their cycle from looking cheap.",
       `Growth assumed. The lower of five-year sales and earnings growth, pulled down when the last year was slower, ${plain(r.growth_cap)}% at most. A financial company gets ${plain(r.growth_cap_lender)}% at most, and no more than its retained profit can fund.`,
@@ -1482,7 +1697,9 @@ td.hi { color: var(--deliv); font-weight: 600; }
       `Margin of safety. Buy only ${plain(r.discount_large)}% or more below fair value for a large cap, ${plain(r.discount_mid)}% for a mid cap, ${plain(r.discount_small)}% for a small cap. Each stock's "buy below" price is that line.`,
       `Timing. The close must be above the 200-day average; analysts' target, where there is one, must not be below the price; and no results may be due within ${m.results_gap} days. A cheap stock that is still falling stays on the waiting list.`,
       `Horizon and target. A compounder (return on equity ${plain(lt.roe)}%+, growth ${plain(lt.growth)}%+, debt under ${plain(lt.de)}× equity, Piotroski ${lt.pio}+) is a 1–2 year pick whose target is fair value a year on, grown at ${plain(R.long_growth)}% at most. Every other pick is a 6–12 month pick whose target is today's fair value. No target is set more than ${plain(r.target_cap)}% above the price.`,
-      `One pick at a time. At most one new pick every ${r.every_days} days: the highest score in the buy zone. Buy at the next open, but only if it opens at or below the buy-below price; otherwise the pick lapses. The score weighs the discount to fair value (35), quality (30), growth (20) and timing (15).`,
+      r.every_days
+        ? `One pick at a time. At most one new pick every ${r.every_days} days: the highest score in the buy zone. Buy at the next open, but only if it opens at or below the buy-below price; otherwise the pick lapses. ${scoring}`
+        : `Naming a pick. A stock is named on the first night it clears every check. When several qualify together they are all named, best score first. Buy at the next open, but only if it opens at or below the buy-below price; otherwise the pick lapses and the stock is not named again for two weeks. ${scoring}`,
       `Selling, whichever comes first. A close at or above the target. A close ${plain(r.stop_large)}% below the buy price for a large cap, ${plain(r.stop_mid)}% for a mid cap, ${plain(r.stop_small)}% for a small cap. The business failing looser checks (earnings turn negative, return on equity under ${plain(hd.roe)}%, debt over ${plain(hd.de)}× equity, Piotroski ${hd.pio} or less). Fair value cut by ${plain(R.fv_cut)}% or more, down to the price or below. Or ${Math.round(r.medium_days / 30.4)} months for a 6–12 month pick and ${Math.round(r.long_days / 30.4)} months for a 1–2 year pick. A stock sold at a loss is not picked again for ${R.repick_days} days.`,
       "A hand veto. A stock can be kept out by name with the reason (the research_skip list in config.json). That is where a promoter pledge, a governance question or bad loans go, after reading the company's own results.",
       "Tax, for your own planning. Gains on shares sold within 12 months are taxed at 20%; after 12 months at 12.5% on gains above ₹1.25 lakh a year. A 6–12 month pick sold at its target usually pays the higher rate. Delivery charges are roughly 0.25% for a round trip.",
