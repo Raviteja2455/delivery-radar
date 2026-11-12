@@ -494,7 +494,8 @@ def parse_deals_table(text, kind, keep):
 # the Indian arm of a foreign bank or broker ("Goldman Sachs (India) Securities") unless the name also says
 # it is offshore; then foreign names; then Indian insurers and pension funds. Everything else (promoters,
 # trading firms, individuals, companies) is "other".
-#   F = foreign portfolio investor (FII/FPI), D = mutual fund, insurer or pension fund, O = other
+#   F = foreign portfolio investor (FII/FPI), V = foreign private-equity, venture or promoter holder,
+#   D = mutual fund, insurer or pension fund, O = other
 FOREIGN_NAMES = (
     # banks and brokers' FPI entities, which take most block deals for their clients
     "GOLDMAN SACHS", "MORGAN STANLEY", "SOCIETE GENERALE", "BNP PARIBAS", "CITIGROUP GLOBAL", "CITIBANK N",
@@ -513,10 +514,7 @@ FOREIGN_NAMES = (
     # hedge funds and trading houses registered as FPIs
     "INTEGRATED CORE STRATEGIES", "MILLENNIUM", "CITADEL", "JANE STREET", "GHISALLO", "VIRIDIAN", "NORTH ROCK",
     "OXBOW", "VITTORIA", "DYMON", "SEGANTII", "OPTIVER", "ELLIOTT", "TIGER GLOBAL", "MARSHALL WACE", "QUADRATURE",
-    # foreign private equity and venture investors, usually sellers after a listing (counted as foreign too)
-    "SOFTBANK", r"\bSVF\b", "PROSUS", "NASPERS", "TENCENT", "ALPHA WAVE", "PEAK XV", "SEQUOIA CAPITAL", "LIGHTSPEED",
-    r"\bACCEL\b", "Y COMBINATOR", "GENERAL ATLANTIC", "WARBURG PINCUS", r"\bKKR\b", "BLACKSTONE", "CARLYLE",
-    "BAIN CAPITAL", r"\bTPG\b", r"\bEQT\b", "NEWQUEST", "PLATINUM JASMINE",
+    "PLATINUM JASMINE",
     # sovereign funds, pension funds, development banks
     "NORGES BANK", "GOVERNMENT OF SINGAPORE", "MONETARY AUTHORITY", "ABU DHABI INVESTMENT", "KUWAIT INVESTMENT",
     "QATAR INVESTMENT", "PUBLIC INVESTMENT FUND", "CAISSE DE DEPOT", "CANADA PENSION", "CPP INVESTMENT",
@@ -527,8 +525,17 @@ FOREIGN_NAMES = (
     "ENDOWMENT", "SOVEREIGN",
     # tell-tale words in fund names and registered addresses
     "MAURITIUS", "SINGAPORE", "CAYMAN", "LUXEMBOURG", "IRELAND", "HONG KONG", "NETHERLANDS", "DELAWARE",
-    r"\(U\.?K\.?\)", r"\bB\.?\s?V\.?$", r"\bAPS$", r"\bPLC\b", r"\bSICAV\b", r"\bPTE\b", r"\bGMBH\b", r"\bAG\b", r"\bL\.?P\.?$", r"\bLLC\b",
+    r"\(U\.?K\.?\)", r"\bPLC\b", r"\bSICAV\b", r"\bPTE\b", r"\bGMBH\b", r"\bAG\b", r"\bL\.?P\.?$", r"\bLLC\b",
     "MASTER FUND", "OFFSHORE", "EMERGING MARKET", r"\bODI\b", r"\bFPI\b", r"\bIFSC\b", "GLOBAL FUND",
+)
+# Foreign private-equity, venture and promoter holders: they bought before the listing (as direct investment, not
+# portfolio money) and appear in deals as sellers. They are kept apart from FIIs, so "FII selling" means portfolio
+# investors selling, as in the exchanges' daily FII figure.
+VENTURE_NAMES = (
+    "SOFTBANK", r"\bSVF\b", "PROSUS", "NASPERS", "TENCENT", "ALPHA WAVE", "PEAK XV", "SEQUOIA CAPITAL", "LIGHTSPEED",
+    r"\bACCEL\b", "Y COMBINATOR", r"\bYCVC\b", r"\bYCS\d", "RIBBIT", "EIGHT ROADS", "GENERAL ATLANTIC", "WARBURG PINCUS",
+    r"\bKKR\b", "BLACKSTONE", r"\bBREP\b", "CARLYLE", "BAIN CAPITAL", r"\bTPG\b", r"\bEQT\b", "NEWQUEST", "BIDCO",
+    "HOECHST", r"\bB\.?\s?V\.?$", r"\bAPS$",
 )
 OFFSHORE_NAMES = r"MAURITIUS|SINGAPORE|CAYMAN|LUXEMBOURG|IRELAND|HONG KONG|\bIFSC\b|\bODI\b|\bFPI\b"
 MF_NAMES = r"MUTUAL FUND|\bMF\b"
@@ -543,12 +550,13 @@ def clean_name(s):
 
 
 def deal_classifier(cfg):
-    """A function from client name to "F", "D" or "O". config.json's "deal_names" adds names either way:
+    """A function from client name to "F", "V", "D" or "O". config.json's "deal_names" adds names either way:
     {"fii": ["SOME FUND"], "not_fii": ["SOME INDIAN FIRM"]} (parts of names, any case)."""
     names = cfg.get("deal_names") or {}
     force_f = [s.upper() for s in names.get("fii", []) if s]
     force_o = [s.upper() for s in names.get("not_fii", []) if s]
     foreign = re.compile("|".join(f"(?:{p})" for p in FOREIGN_NAMES))
+    venture = re.compile("|".join(f"(?:{p})" for p in VENTURE_NAMES))
     offshore, mf, domestic, india = (re.compile(p) for p in (OFFSHORE_NAMES, MF_NAMES, DOMESTIC_NAMES, INDIA_ARM))
     memo = {}
 
@@ -564,6 +572,8 @@ def deal_classifier(cfg):
             t = "D"
         elif india.search(n) and not offshore.search(n):
             t = "O"
+        elif venture.search(n):
+            t = "V"
         elif foreign.search(n):
             t = "F"
         elif domestic.search(n):
@@ -2181,7 +2191,8 @@ def merge_bulk_block(rows):
 def deals_block(deals, days, adj, eq, meta, who, asof):
     """FII and fund deals of the last DEALS_SHIP sessions, in every stock, for the app's Deals tab.
 
-    Each row gets t ("F" for an FII, "D" for a mutual fund, insurer or pension fund); rt when the same client
+    Each row gets t ("F" for an FII, "D" for a mutual fund, insurer or pension fund; foreign private-equity and
+    venture holders, "V", appear only as the other side of a deal); rt when the same client
     also traded the other way that session to within 10% (trading, not a position); x, the clients on the
     other side at the same price, each with its own F/D/O (who sold to the FII, or bought from it); and pa, the deal price restated
     for a split or bonus since, when there was one, so it compares with today's price."""
@@ -2203,7 +2214,7 @@ def deals_block(deals, days, adj, eq, meta, who, asof):
     rows, syms = [], set()
     for x in recent:
         t = who(x["cl"])
-        if t == "O":
+        if t not in ("F", "D"):
             continue
         me = clean_name(x["cl"]).upper()
         b, s = sides[(x["d"], x["s"], me)]

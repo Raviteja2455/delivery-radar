@@ -27,7 +27,9 @@ def test_who():
     other = ["GRAVITON RESEARCH CAPITAL LLP", "HRTI PRIVATE LIMITED", "DIXON TECHNOLOGIES (INDIA) LIMITED",
              "GOLDMAN SACHS (INDIA) SECURITIES PRIVATE LIMITED", "MORGAN STANLEY INDIA COMPANY PRIVATE LIMITED",
              "JASUB PROPERTY HOLDINGS LLP", "<b>ODD NAME & CO</b>"]
-    for names, t in ((fii, "F"), (fund, "D"), (other, "O")):
+    venture = ["SVF II LIGHTBULB (CAYMAN) LIMITED", "TENCENT CLOUD EUROPE B.V.", "PEAK XV PARTNERS INVESTMENTS VI-1",
+               "ACCEL INDIA IV (MAURITIUS) LIMITED", "SAGILITY B.V."]
+    for names, t in ((fii, "F"), (venture, "V"), (fund, "D"), (other, "O")):
         for n in names:
             assert WHO(n) == t, (n, WHO(n), t)
     # config.json can overrule the patterns either way

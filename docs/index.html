@@ -2096,7 +2096,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
   const titleName = (s) => s.split(" ").map((w) => SMALL_WORDS.has(w) ? w.toLowerCase()
     : (w.length <= 3 && /^[A-Z.&()/-]+$/.test(w)) || /^([A-Z]\.)+$/.test(w) ? w
     : w.replace(/^([^A-Z]*[A-Z])(.*)$/, (m, a, b) => a + b.toLowerCase())).join(" ");
-  const WHO_TAG = { F: "FII", D: "Fund" };
+  const WHO_TAG = { F: "FII", D: "Fund", V: "foreign PE/VC" };
   const grpTag = (g) => ({ 50: "Nifty 50", 100: "Next 50", 500: "Nifty 500" }[g] || "Outside Nifty 500");
   const inUni = (g) => dstate.uni === "all" || (dstate.uni === "n50" ? g === 50 : dstate.uni === "n100" ? g === 50 || g === 100 : g > 0);
 
@@ -2236,8 +2236,8 @@ td.hi { color: var(--deliv); font-weight: 600; }
   function swapNote(g) {
     const swaps = g.rows.filter((r) => r.t === "F" && r.x && r.x.length && r.x.every(([, t]) => t === "F"));
     if (!swaps.length) return null;
-    return h("p", { class: "note", text: "Both sides foreign on " + swaps.map((r) => shortDate(r.d)).filter((d, i, a) => a.indexOf(d) === i).join(", ") +
-      ": that trade moved shares between foreign holders, so it adds no new foreign money. A foreign promoter or venture fund selling (SoftBank's funds, for example) also shows as foreign." });
+    return h("p", { class: "note", text: "FIIs on both sides on " + swaps.map((r) => shortDate(r.d)).filter((d, i, a) => a.indexOf(d) === i).join(", ") +
+      ": that trade moved shares from one foreign fund to another, so it adds no new foreign money." });
   }
   function renderDealList() {
     const F = DATA.fd, box = $("#deals-list");
@@ -2270,7 +2270,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         "A bulk deal is one client trading more than 0.5% of a company's shares in a session; a block deal is a single trade of ₹25 crore or more in the block window. NSE lists a big block again among the bulk deals; it is counted once here.",
         "Most FII buying goes through the normal market in small orders and never appears in these lists. A deal here is the part with a name on it, usually a stake sale by a promoter or an early investor, taken by funds.",
         "Who is an FII is read from the client's name: foreign banks' desks (Goldman Sachs, Societe Generale, BNP Paribas, Morgan Stanley), foreign funds, sovereign and pension funds, and names registered abroad (Mauritius, Singapore, Cayman). Banks' desks often buy for clients or to hedge. A name tagged wrongly can be fixed with deal_names in config.json.",
-        "MF & insurers are Indian mutual funds, insurance companies and pension funds. Everyone else (promoters, trading firms, companies, individuals) is left out of this tab; the stock pages still list their deals.",
+        "MF & insurers are Indian mutual funds, insurance companies and pension funds. Foreign private-equity, venture and promoter holders (SoftBank, Tencent, Peak XV, Accel, a Dutch parent company) are not counted as FIIs: they bought before the listing, and their sales are not the portfolio flow in the daily FII figure. They show as \"foreign PE/VC\" on the other side of a deal. Everyone else (Indian promoters, trading firms, companies, individuals) is left out of this tab; the stock pages still list their deals.",
         "Round trips: a client that bought and sold the same stock in one session to within 10% was trading, not taking a position; they are hidden unless you untick the box.",
         "FII price: the average price of the shown deals, restated for any split or bonus since. A stock holding above it means those buyers are in profit; one below it means they are under water.",
       ].map((t) => h("li", { text: t }))));
