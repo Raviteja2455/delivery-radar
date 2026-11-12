@@ -5,7 +5,8 @@ averages, delivered and traded quantity, volume against its 20-day average, aver
 buildup, bulk and block deals, and a six-signal accumulation score. A market band at the top sets the size of swing
 trades (green: half size; amber and red: full size; always in cash). A Picks tab names one three-month swing pick
 every ten days and tracks how every pick did. A Research tab screens the Nifty 500 for investments of six months to
-two years, bought only at a margin of safety below a fair value worked out four ways.
+two years, bought only at a margin of safety below a fair value worked out four ways. A Deals tab lists FII (and
+mutual fund) bulk and block deals in every NSE stock, with filters.
 
 It refreshes itself every weekday night from NSE's public end-of-day files, using GitHub's free scheduled jobs.
 
@@ -303,6 +304,49 @@ only when the fundamentals and the prices are from the same session.
 Each stock's own page shows its research view: the fair value and checklist if it passes the quality checks, or the
 checks it fails. `python tests/test_research.py` checks the arithmetic on made-up numbers.
 
+## The Deals tab (November 2026)
+
+Bulk and block deals by FIIs in **every** NSE stock, not only the Nifty 500, with the option to show Indian mutual
+funds and insurers instead or as well. For each stock: how much they bought or sold, their average price, tonight's
+close against it ("+3.1% above FII buy price"), the date, the clients, and who was on the other side of each trade.
+
+| Filter | Choices |
+|---|---|
+| Who | FII · MF & insurers · Both |
+| Side | Buying · Selling · Net |
+| Period | Last session · 5 sessions · 1 month · 3 months |
+| Stocks | All NSE · Nifty 50 · Nifty 100 · Nifty 500 |
+| Size per stock | Any · ₹10 cr+ · ₹50 cr+ · ₹100 cr+ |
+| Deal type | Bulk + block · Block only · Bulk only |
+| Sort | Biggest · Latest · Nearest FII price · Most above FII price |
+| Round trips | Hidden by default: a client buying and selling the same stock in one session to within 10% |
+
+The filters are remembered on the phone. The Stocks tab gains an **FII deal buys** chip (FIIs net buyers in bulk/block
+deals over the last 10 sessions), and each stock page tags FII and fund names in its deal list. The Deals tab's
+number is how many stocks FIIs bought in tonight's deals.
+
+**Who counts as an FII.** NSE prints only the client's name, so the script reads it: foreign banks' desks (Goldman
+Sachs, Societe Generale, BNP Paribas, Morgan Stanley, Citi, JP Morgan, BofA), foreign fund houses, hedge funds,
+sovereign and pension funds, and names registered abroad (Mauritius, Singapore, Cayman, Luxembourg, IFSC, "ODI").
+Any mutual fund is Indian; the Indian arm of a foreign bank ("Goldman Sachs (India) Securities") is not an FII. To fix
+a name the patterns get wrong, add part of it to `config.json`:
+
+```json
+"deal_names": {"fii": ["SOME FOREIGN FUND"], "not_fii": ["SOME INDIAN FIRM"]}
+```
+
+**What it misses.** Most FII buying goes through the normal market in small orders and never shows in these lists;
+the deals are the named part, usually a promoter or early investor selling a stake to funds. Deals done only on BSE
+are not included. A foreign promoter or venture fund selling (SoftBank's funds, for example) also counts as foreign,
+so a deal where both sides are foreign is flagged as moving no new foreign money. NSE lists a large block again among
+the day's bulk deals; it is counted once.
+
+**Where the deals come from.** Every night `bulk.csv` and `block.csv` (that day's deals) and NSE's deal-history API
+(the Large Deals page) for the last week, which fills any night the files were missed. The first run with this
+feature asks the API for the last 90 days. The API sometimes refuses GitHub's servers; then the day's files keep the
+record going and the next run tries again. Deals are kept 200 days in `data/deals.json`: every deal in the Nifty 500,
+and FII and fund deals in any stock. Tonight's close for deal stocks outside the Nifty 500 is saved in `data/dealpx.json`.
+
 ## Weekend sessions
 
 NSE trades on a few Saturdays and Sundays: Budget day (Sunday 1 February 2026) and Diwali's Muhurat session (Sunday
@@ -351,9 +395,11 @@ through a local web server (`python -m http.server -d docs`).
 
 ## For developers
 
+`python tests/test_research.py` and `python tests/test_deals.py` check the arithmetic and the deal handling.
 `python tests/make_sample.py sample 2026-10-23` writes made-up files in NSE's exact layouts, and
 `python radar.py update --source-dir sample --today 2026-10-23` runs the whole pipeline offline against them.
 
 Data source: NSE public archives (sec_bhavdata_full, F&O UDiFF bhavcopy, ind_close_all, bulk.csv, block.csv,
-fao_participant_oi, index lists), the NSE provisional FII/DII figures, and TradingView's screener for fundamentals.
+fao_participant_oi, index lists), NSE's deal-history API, the NSE provisional FII/DII figures, and TradingView's
+screener for fundamentals.
 For information only; not investment advice.

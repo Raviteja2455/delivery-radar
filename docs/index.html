@@ -248,6 +248,20 @@ td.hi { color: var(--deliv); font-weight: 600; }
 .funnel .b.last { background: var(--signal); }
 .funnel .n { font: 600 15px var(--font-c); text-align: right; font-variant-numeric: tabular-nums; }
 
+/* deals */
+.dl-row { display: flex; align-items: center; gap: 8px; }
+.dl-row + .dl-row { margin-top: 2px; }
+.dl-k { flex: 0 0 38px; font-size: 12.5px; color: var(--ink-2); }
+.dl-row .chips { flex: 1 1 auto; min-width: 0; padding: 4px 0 8px; }
+.dl-filters .form { margin-top: 6px; }
+.form .dl-check { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); align-self: end; padding-bottom: 9px; }
+.form .dl-check input { width: 18px; height: 18px; accent-color: var(--ink); }
+.dl-item > summary .meta .tag { font-size: 12.5px; }
+.dl-tbl td { vertical-align: top; }
+.dl-tbl td.dl-cl { white-space: normal; text-align: left; min-width: 118px; max-width: 230px; font: 500 14px/1.25 var(--font-c); }
+.dl-tbl th:nth-child(2) { text-align: left; }
+.dl-tbl td.dl-cl small { white-space: normal; }
+
 /* live cues */
 .live { background: var(--sheet); border-radius: 12px; padding: 9px 14px 12px; margin: 12px 0 0; }
 .live-top { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); min-height: 28px; }
@@ -275,14 +289,17 @@ td.hi { color: var(--deliv); font-weight: 600; }
 @media (min-width: 560px) {
   .snap { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
-@media (max-width: 370px) {
-  .figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .tabs { gap: 2px; }
-  .tab { font-size: 15px; padding: 8px 4px; }
+@media (max-width: 430px) {
+  .tabs { gap: 0; padding: 3px; }
+  .tab { font-size: 15px; padding: 8px 5px; }
   .tab .n { margin-left: 3px; }
 }
+@media (max-width: 370px) {
+  .figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tab { font-size: 14px; padding: 8px 3px; }
+}
 @media (prefers-reduced-motion: no-preference) {
-  #detail:not([hidden]), #mtf-view:not([hidden]), #picks-view:not([hidden]), #research-view:not([hidden]) { animation: rise .18s ease-out; }
+  #detail:not([hidden]), #mtf-view:not([hidden]), #picks-view:not([hidden]), #research-view:not([hidden]), #deals-view:not([hidden]) { animation: rise .18s ease-out; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   .lf .v.tick-up { animation: tickup 1.6s ease-out; }
   .lf .v.tick-dn { animation: tickdn 1.6s ease-out; }
@@ -303,6 +320,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
       <button class="tab" id="tab-mtf" type="button" aria-selected="false">Swing<span class="n" id="mtf-count"></span></button>
       <button class="tab" id="tab-picks" type="button" aria-selected="false">Picks<span class="n" id="picks-count"></span></button>
       <button class="tab" id="tab-research" type="button" aria-selected="false">Research<span class="n" id="research-count"></span></button>
+      <button class="tab" id="tab-deals" type="button" aria-selected="false">Deals<span class="n" id="deals-count"></span></button>
     </nav>
     <section class="live" id="live" aria-label="Live market cues">
       <div class="live-top"><span class="beat" aria-hidden="true"></span><span class="when">Fetching live quotes…</span></div>
@@ -321,6 +339,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         <p>The band at the top sets the size of swing trades. All of them are in cash, with no MTF. Green (an uptrend) means half size, because breakouts taken in green markets did worst in the 2020–26 backtests; amber and red mean full size. The Swing tab runs the full entry, sizing and exit rules on every stock and explains the evidence under <i>The rules this tab applies</i>.</p>
         <p>The Picks tab ranks every Nifty 100 stock each night and names one three-month swing pick every ten days, aiming for at least +5%. It then tracks every pick, and a replay of the same rule on past data, so you can see how often the target was reached. The Swing tab stays on the Nifty 50, the stocks its plan was tested on. Log the picks you buy there, like trades on the Swing tab: every nightly update refreshes each one's gain and says when the rule would sell.</p>
         <p>The Research tab screens the Nifty 500 (large, mid and small caps) for investments of six months to two years. It keeps only profitable, well-financed, growing companies, works out a fair value four ways, and names a stock only when the price is well below it and no longer falling. It names every stock that qualifies, each sized at ₹1 lakh, and follows every pick to its exit; which ones you take depends on your budget. Most nights it names nothing: waiting for price is part of the method.</p>
+        <p>The Deals tab lists bulk and block deals by FIIs (and, if you choose, by Indian mutual funds and insurers) in every NSE stock: who bought or sold, how much, at what price, who was on the other side, and whether the stock is holding above the price they paid. Filter by side, period, index, size and deal type.</p>
         <p>FII activity, inside the band, shows each session's net cash buying or selling by foreign investors (NSE's provisional figure) and how their index futures, calls and puts changed, from NSE's participant-wise open interest. A positive futures or calls number, or a negative puts number, is the bullish side. The verdict under the table weighs the latest day's cash, futures and options: when they all agree it says bullish or bearish, otherwise it leans with the majority. On Nifty's weekly expiry (marked *), option changes include contracts that simply expired. The tile beside VIX shows how much of FIIs' index-futures position is long.</p>
       </div>
     </details>
@@ -344,6 +363,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
   <main id="mtf-view" hidden></main>
   <main id="picks-view" hidden></main>
   <main id="research-view" hidden></main>
+  <main id="deals-view" hidden></main>
   <main id="detail" hidden></main>
 </div>
 
@@ -413,6 +433,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
     ["long", "Long buildup", (s) => s.bu === "Long buildup"],
     ["short", "Short buildup", (s) => s.bu === "Short buildup"],
     ["deals", "Deals", (s) => !!s.deal],
+    ["fiideal", "FII deal buys", (s) => fiiDealStocks().has(s.s)],
     ["quality", "Research quality", (s) => !!(s.rs && s.rs.ok)],
     ["watch", "★ Watchlist", (s) => watch.has(s.s)],
   ];
@@ -727,7 +748,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
     }
     card.append(h("ul", { class: "deals" }, mine.map((d) => h("li", {},
       h("div", { text: `${shortDate(d.d)}: ${d.k === "BLOCK" ? "block" : "bulk"} deal, ${d.bs.toLowerCase()} ${qty(d.q)} shares at ${rupees(d.p)}` }),
-      h("div", { class: "who", text: d.cl })))));
+      h("div", { class: "who" }, d.cl, d.t === "F" || d.t === "D" ? h("span", { class: "tag deal", style: "margin-left:6px", text: d.t === "F" ? "FII" : "Fund" }) : null)))));
     if (st.deal) card.append(h("p", { class: "note", text: st.deal.held
       ? `The close of ${rupees(st.c)} is at or above the latest deal price of ${rupees(st.deal.p)}.`
       : `The close of ${rupees(st.c)} is below the latest deal price of ${rupees(st.deal.p)}.` }));
@@ -2055,25 +2076,242 @@ td.hi { color: var(--deliv); font-weight: 600; }
     return { start };
   })();
 
+  // ---------------------------------------------------------------- Deals tab: FII and fund bulk/block deals, every NSE stock
+  // Filters are kept on this phone. Values are deal quantity × price; "FII price" is the average price the
+  // shown side paid (or got), restated for any split or bonus since, against tonight's close.
+  const DEAL_PERIODS = [[1, "Last session"], [5, "5 sessions"], [20, "1 month"], [60, "3 months"]];
+  const DEAL_UNI = [["all", "All NSE stocks"], ["n50", "Nifty 50"], ["n100", "Nifty 100"], ["n500", "Nifty 500"]];
+  const DEAL_MIN = [[0, "Any size"], [10, "₹10 cr+"], [50, "₹50 cr+"], [100, "₹100 cr+"]];
+  const DEAL_KIND = [["all", "Bulk + block"], ["BLOCK", "Block only"], ["BULK", "Bulk only"]];
+  const DEAL_SORT = [["big", "Biggest first"], ["new", "Latest first"], ["near", "Nearest FII price"], ["above", "Most above FII price"]];
+  const DEAL_WHO = [["F", "FII"], ["D", "MF & insurers"], ["both", "Both"]];
+  const DEAL_SIDE = [["buy", "Buying"], ["sell", "Selling"], ["net", "Net"]];
+  const dstate = Object.assign({ who: "F", side: "buy", period: 5, uni: "all", min: 0, kind: "all", rt: true, sort: "big" },
+    (() => { try { return JSON.parse(localStorage.getItem("dr-deals") || "{}"); } catch { return {}; } })(), { q: "" });
+  const saveDstate = () => { try { const { q, ...keep } = dstate; localStorage.setItem("dr-deals", JSON.stringify(keep)); } catch { /* private mode */ } };
+  let dealsScroll = 0;
+  const DEALS_DAYS_NOTE = "about three months";
+  const crore = (x) => x == null ? "–" : (x < 0 ? MINUS : "") + "₹" + fmt(Math.abs(x), Math.abs(x) >= 100 ? 0 : 1) + " cr";
+  const SMALL_WORDS = new Set(["OF", "AND", "THE", "ON", "FOR", "IN", "AS"]);
+  const titleName = (s) => s.split(" ").map((w) => SMALL_WORDS.has(w) ? w.toLowerCase()
+    : (w.length <= 3 && /^[A-Z.&()/-]+$/.test(w)) || /^([A-Z]\.)+$/.test(w) ? w
+    : w.replace(/^([^A-Z]*[A-Z])(.*)$/, (m, a, b) => a + b.toLowerCase())).join(" ");
+  const WHO_TAG = { F: "FII", D: "Fund" };
+  const grpTag = (g) => ({ 50: "Nifty 50", 100: "Next 50", 500: "Nifty 500" }[g] || "Outside Nifty 500");
+  const inUni = (g) => dstate.uni === "all" || (dstate.uni === "n50" ? g === 50 : dstate.uni === "n100" ? g === 50 || g === 100 : g > 0);
+
+  // Rows passing the who / period / index / type / round-trip filters (not size or search).
+  function dealRows(F, period) {
+    const start = F.days[Math.max(0, F.days.length - period)];
+    return F.rows.filter((r) => r.d >= start && (dstate.who === "both" || r.t === dstate.who)
+      && (dstate.kind === "all" || r.k === dstate.kind) && (!dstate.rt || !r.rt) && inUni(F.g[r.s]));
+  }
+  function dealGroups(F, rows) {
+    const m = new Map();
+    for (const r of rows) {
+      let g = m.get(r.s);
+      if (!g) { g = { s: r.s, rows: [], bq: 0, bv: 0, bx: 0, sq: 0, sv: 0, sx: 0, last: r.d, block: false }; m.set(r.s, g); }
+      const v = r.q * r.p / 1e7, pa = r.pa ?? r.p;
+      if (r.bs === "BUY") { g.bq += r.q; g.bv += v; g.bx += r.q * pa; } else { g.sq += r.q; g.sv += v; g.sx += r.q * pa; }
+      g.rows.push(r);
+      if (r.d > g.last) g.last = r.d;
+      if (r.k === "BLOCK") g.block = true;
+    }
+    return [...m.values()].map((g) => {
+      g.net = g.bv - g.sv;
+      g.buyAvg = g.bq ? g.bx / g.bq : null;
+      g.sellAvg = g.sq ? g.sx / g.sq : null;
+      const side = dstate.side === "net" ? (g.net >= 0 ? "buy" : "sell") : dstate.side;
+      g.val = dstate.side === "buy" ? g.bv : dstate.side === "sell" ? g.sv : g.net;
+      g.ref = side === "buy" ? g.buyAvg : g.sellAvg;
+      g.px = F.px[g.s] || null;
+      g.vs = g.px && g.ref ? (g.px[0] / g.ref - 1) * 100 : null;
+      g.rows.sort((a, b) => b.d.localeCompare(a.d) || b.q * b.p - a.q * a.p);
+      return g;
+    });
+  }
+  const sideOk = (g) => dstate.side === "buy" ? g.bv > 0 : dstate.side === "sell" ? g.sv > 0 : Math.abs(g.net) > 0.005;
+  // Stocks where FIIs were net buyers in bulk/block deals over the last `n` sessions (for the Stocks tab chip).
+  let fiiDealSet = null;
+  function fiiDealStocks(n = 10) {
+    if (fiiDealSet) return fiiDealSet;
+    const F = DATA.fd, net = new Map();
+    if (F && F.days.length) {
+      const start = F.days[Math.max(0, F.days.length - n)];
+      for (const r of F.rows) if (r.t === "F" && !r.rt && r.d >= start) net.set(r.s, (net.get(r.s) || 0) + (r.bs === "BUY" ? 1 : -1) * r.q * r.p);
+    }
+    fiiDealSet = new Set([...net].filter(([, v]) => v > 0).map(([s]) => s));
+    return fiiDealSet;
+  }
+  function updateDealsCount() {
+    const F = DATA.fd, el = $("#deals-count");
+    const n = F ? new Set(F.rows.filter((r) => r.d === DATA.asof && r.t === "F" && r.bs === "BUY" && !r.rt).map((r) => r.s)).size : 0;
+    el.textContent = n ? String(n) : "";
+    n ? el.setAttribute("aria-label", `${n} stock${n > 1 ? "s" : ""} with FII buying in tonight's deals`) : el.removeAttribute("aria-label");
+  }
+  function dealsBand(F, groups) {
+    const who = { F: "FIIs", D: "Funds", both: "FIIs and funds" }[dstate.who];
+    const bought = groups.filter((g) => g.bv > 0), sold = groups.filter((g) => g.sv > 0);
+    const bv = bought.reduce((a, g) => a + g.bv, 0), sv = sold.reduce((a, g) => a + g.sv, 0), net = bv - sv;
+    const start = F.days[Math.max(0, F.days.length - dstate.period)];
+    const span = dstate.period === 1 ? dt(DATA.asof, { day: "numeric", month: "short" }) : `${shortDate(start)} to ${shortDate(DATA.asof)}`;
+    const top = [...bought].sort((a, b) => b.bv - a.bv).slice(0, 3).map((g) => `${g.s} ${crore(g.bv)}`);
+    return h("section", { class: "regime", "data-r": !bought.length && !sold.length ? "amber" : net >= 0 ? "green" : "red" },
+      h("p", { class: "verdict" }, h("b", { text: who }), bought.length
+        ? ` bought ${crore(bv)} in ${bought.length} stock${bought.length > 1 ? "s" : ""}` : " made no named buys"),
+      h("ul", { class: "why" }, [
+        `NSE bulk and block deals, ${span}${dstate.uni === "all" ? "" : ", " + DEAL_UNI.find(([k]) => k === dstate.uni)[1]}.`,
+        top.length ? `Largest buys: ${top.join(", ")}.` : null,
+        sold.length ? `Sold ${crore(sv)} in ${sold.length} stock${sold.length > 1 ? "s" : ""}.` : null,
+      ].filter(Boolean).map((t) => h("li", { text: t }))),
+      h("div", { class: "figs" },
+        fig("Bought, ₹ cr", fmt(bv, 0), null, `${bought.length} stock${bought.length === 1 ? "" : "s"}`),
+        fig("Sold, ₹ cr", fmt(sv, 0), null, `${sold.length} stock${sold.length === 1 ? "" : "s"}`),
+        fig("Net, ₹ cr", (net > 0.5 ? "+" : "") + fmt(net, 0), null, null),
+        fig("Deals", String(groups.reduce((a, g) => a + g.rows.length, 0)), null, dstate.rt ? "round trips hidden" : "all shown")));
+  }
+  function dealsFilters() {
+    const chips = (label, opts, key, cast = (x) => x) => h("div", { class: "dl-row" },
+      h("span", { class: "dl-k", text: label }),
+      h("div", { class: "chips", role: "toolbar", "aria-label": label }, opts.map(([k, t]) =>
+        h("button", { class: "chip", type: "button", "aria-pressed": String(dstate[key] === k),
+          onclick: () => { dstate[key] = cast(k); saveDstate(); renderDeals(true); } }, t))));
+    const sel = (label, opts, key, cast = (x) => x) => h("label", {}, label,
+      h("select", { onchange: (e) => { dstate[key] = cast(e.target.value); saveDstate(); renderDeals(true); } },
+        opts.map(([k, t]) => h("option", { value: k, selected: String(dstate[key]) === String(k) || null, text: t }))));
+    const search = h("input", { type: "search", placeholder: "Stock or client name", autocomplete: "off", "aria-label": "Search deals", value: dstate.q });
+    search.addEventListener("input", (e) => { dstate.q = e.target.value; renderDealList(); });
+    return h("section", { class: "card dl-filters" },
+      chips("Who", DEAL_WHO, "who"),
+      chips("Side", DEAL_SIDE, "side"),
+      h("div", { class: "form", style: "margin-top:4px" },
+        sel("Period", DEAL_PERIODS, "period", Number), sel("Stocks", DEAL_UNI, "uni"),
+        sel("Size per stock", DEAL_MIN, "min", Number), sel("Deal type", DEAL_KIND, "kind"),
+        sel("Sort", DEAL_SORT, "sort"),
+        h("label", { class: "dl-check" }, h("input", { type: "checkbox", checked: dstate.rt || null,
+          onchange: (e) => { dstate.rt = e.target.checked; saveDstate(); renderDeals(true); } }), "Hide same-day round trips"),
+        h("label", { class: "wide" }, "Search", search)));
+  }
+  function dealRow(g, F) {
+    const side = dstate.side === "net" ? (g.net >= 0 ? "buy" : "sell") : dstate.side;
+    const who = { F: "FII", D: "Fund", both: "Their" }[dstate.who];
+    const top = g.rows.filter((r) => (r.bs === "BUY") === (side === "buy"));
+    const names = [...new Set(top.map((r) => titleName(r.cl)))];
+    const val = dstate.side === "net" ? (g.net > 0 ? "+" : "") + crore(g.net) : crore(g.val);
+    const st = DATA.stocks.find((x) => x.s === g.s);
+    const vsTag = g.vs == null ? null : h("span", { class: "tag " + (g.vs >= 0 ? "lb" : "sb"),
+      text: `${signed(g.vs, 1)} ${g.vs >= 0 ? "above" : "below"} ${who === "Their" ? "their" : who} ${side === "buy" ? "buy" : "sell"} price` });
+    return h("details", { class: "rs-row dl-item" },
+      h("summary", {},
+        h("span", { class: "who" }, h("span", { class: "sym", text: g.s }), h("span", { class: "tag", text: grpTag(F.g[g.s]) }),
+          g.block ? h("span", { class: "tag deal", text: "Block" }) : null),
+        h("span", { class: side === "buy" ? "up" : "down", text: val }),
+        h("span", { class: "meta" },
+          `${who} avg ${side === "buy" ? "buy" : "sell"} `, h("b", { text: rupees(g.ref) }),
+          g.px ? [" · now ", h("b", { text: rupees(g.px[0]) })] : " · no price tonight",
+          ` · ${shortDate(g.last)} · ${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2}` : ""}`),
+        vsTag ? h("span", { class: "meta" }, vsTag) : null),
+      h("div", { class: "rs-body" },
+        h("p", { class: "dname", style: "margin-bottom:6px", text: [F.nm[g.s], F.cap[g.s] ? CAP[F.cap[g.s]] : null].filter(Boolean).join(", ") }),
+        g.bv > 0 && g.sv > 0 ? h("p", { class: "note", style: "margin-top:0", text: `Bought ${crore(g.bv)}, sold ${crore(g.sv)}: net ${(g.net > 0 ? "+" : "") + crore(g.net)}.` }) : null,
+        h("div", { class: "tbl" }, h("table", { class: "pk-tbl dl-tbl" },
+          h("thead", {}, h("tr", {}, ["Date", "Client", "Side", "Price", "₹ cr"].map((t) => h("th", { scope: "col", text: t })))),
+          h("tbody", {}, g.rows.map((r) => {
+            const other = (r.x || []).map(([n, t]) => titleName(n) + (WHO_TAG[t] ? ` (${WHO_TAG[t]})` : ""));
+            const more = r.xn ? ` +${r.xn - other.length} more` : "";
+            return h("tr", {},
+              h("td", {}, shortDate(r.d), h("small", { text: r.k === "BLOCK" ? "block" : "bulk" })),
+              h("td", { class: "dl-cl" }, titleName(r.cl), dstate.who === "both" ? h("small", { text: WHO_TAG[r.t] }) : null,
+                other.length ? h("small", { text: `${r.bs === "BUY" ? "from" : "to"} ${other.join(", ")}${more}` }) : null),
+              h("td", { class: r.bs === "BUY" ? "up" : "down", text: r.bs === "BUY" ? "Buy" : "Sell" }),
+              h("td", {}, price(r.p), h("small", { text: r.pa ? `${price(r.pa)} adj.` : `${qty(r.q)} sh` })),
+              h("td", {}, fmt(r.q * r.p / 1e7, r.q * r.p >= 1e9 ? 0 : 1), r.pa ? h("small", { text: `${qty(r.q)} sh` }) : null));
+          })))),
+        swapNote(g),
+        h("div", { class: "btns" }, st
+          ? h("button", { class: "btn ghost small", type: "button", onclick: () => { dealsScroll = window.scrollY; cameFromList = true; location.hash = "s=" + encodeURIComponent(g.s); }, text: `Open ${g.s}` })
+          : h("a", { class: "btn ghost small", href: `https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(g.s)}`, target: "_blank", rel: "noopener", text: "NSE quote ↗" }))));
+  }
+  // A buy whose other side was also foreign moves no new foreign money into India.
+  function swapNote(g) {
+    const swaps = g.rows.filter((r) => r.t === "F" && r.x && r.x.length && r.x.every(([, t]) => t === "F"));
+    if (!swaps.length) return null;
+    return h("p", { class: "note", text: "Both sides foreign on " + swaps.map((r) => shortDate(r.d)).filter((d, i, a) => a.indexOf(d) === i).join(", ") +
+      ": that trade moved shares between foreign holders, so it adds no new foreign money. A foreign promoter or venture fund selling (SoftBank's funds, for example) also shows as foreign." });
+  }
+  function renderDealList() {
+    const F = DATA.fd, box = $("#deals-list");
+    if (!box) return;
+    const q = dstate.q.trim().toLowerCase();
+    let groups = dealGroups(F, dealRows(F, dstate.period)).filter((g) => sideOk(g) && Math.abs(g.val) >= dstate.min);
+    if (q) groups = groups.filter((g) => g.s.toLowerCase().includes(q) || (F.nm[g.s] || "").toLowerCase().includes(q)
+      || g.rows.some((r) => r.cl.toLowerCase().includes(q)));
+    const by = {
+      big: (a, b) => Math.abs(b.val) - Math.abs(a.val),
+      new: (a, b) => b.last.localeCompare(a.last) || Math.abs(b.val) - Math.abs(a.val),
+      near: (a, b) => (a.vs == null ? Infinity : Math.abs(a.vs)) - (b.vs == null ? Infinity : Math.abs(b.vs)),
+      above: (a, b) => (b.vs ?? -Infinity) - (a.vs ?? -Infinity),
+    }[dstate.sort];
+    groups.sort(by);
+    const head = h("h3", { text: `Stocks (${groups.length})` });
+    if (!groups.length) {
+      box.replaceChildren(head, h("p", { class: "note", style: "margin-top:0", text: "No deals match these filters. Try a longer period, any size, or both sides." }));
+      return;
+    }
+    box.replaceChildren(head,
+      h("p", { class: "note", style: "margin:-4px 0 6px", text: "Tap a stock for every deal, the client on the other side, and a link to its page." }),
+      ...groups.map((g) => dealRow(g, F)));
+  }
+  function dealsCoverage(F) {
+    const hist = F.hist ? `NSE's deal history is read back to ${longDate(F.hist)}` : "NSE's deal history hasn't answered yet; until it does, deals are added night by night from that day's lists";
+    return h("details", { class: "card" }, h("summary", { text: "What these deals show, and what they miss" }),
+      h("ol", { class: "rules" }, [
+        `Source: NSE's bulk and block deal lists, every NSE stock. ${hist}. Deals done on BSE alone are not here (some large blocks are), and nothing older than ${DEALS_DAYS_NOTE}.`,
+        "A bulk deal is one client trading more than 0.5% of a company's shares in a session; a block deal is a single trade of ₹25 crore or more in the block window. NSE lists a big block again among the bulk deals; it is counted once here.",
+        "Most FII buying goes through the normal market in small orders and never appears in these lists. A deal here is the part with a name on it, usually a stake sale by a promoter or an early investor, taken by funds.",
+        "Who is an FII is read from the client's name: foreign banks' desks (Goldman Sachs, Societe Generale, BNP Paribas, Morgan Stanley), foreign funds, sovereign and pension funds, and names registered abroad (Mauritius, Singapore, Cayman). Banks' desks often buy for clients or to hedge. A name tagged wrongly can be fixed with deal_names in config.json.",
+        "MF & insurers are Indian mutual funds, insurance companies and pension funds. Everyone else (promoters, trading firms, companies, individuals) is left out of this tab; the stock pages still list their deals.",
+        "Round trips: a client that bought and sold the same stock in one session to within 10% was trading, not taking a position; they are hidden unless you untick the box.",
+        "FII price: the average price of the shown deals, restated for any split or bonus since. A stock holding above it means those buyers are in profit; one below it means they are under water.",
+      ].map((t) => h("li", { text: t }))));
+  }
+  function renderDeals(keepScroll) {
+    const V = $("#deals-view"), F = DATA.fd, y = window.scrollY;
+    if (!F || !F.days || !F.days.length) {
+      V.replaceChildren(h("section", { class: "card" }, h("h3", { text: "Deals start with the next nightly update" }),
+        h("p", { class: "note", style: "margin-top:0", text: "Tonight's run reads NSE's bulk and block deals, marks which clients are FIIs and fills this tab." })));
+      return;
+    }
+    const groups = dealGroups(F, dealRows(F, dstate.period));
+    V.replaceChildren(dealsBand(F, groups), dealsFilters(), h("section", { class: "card", id: "deals-list" }), dealsCoverage(F),
+      h("p", { class: "foot", text: "Names, quantities and prices as NSE published them. For information only, not investment advice." }));
+    renderDealList();
+    if (keepScroll) window.scrollTo(0, y);
+  }
+
   // ---------------------------------------------------------------- routing and start-up
   function route() {
     if (!DATA) return;
     updateTabCount();
     updatePickCount();
     updateResearchCount();
+    updateDealsCount();
     const m = location.hash.match(/^#s=(.+)$/);
     if (m) { $("#apphead").hidden = true; showDetail(decodeURIComponent(m[1])); return; }
     $("#apphead").hidden = false;
     $("#detail").hidden = true;
     const onMtf = location.hash === "#mtf", onPicks = location.hash === "#picks", onResearch = location.hash === "#research";
-    $("#tab-stocks").setAttribute("aria-selected", String(!onMtf && !onPicks && !onResearch));
+    const onDeals = location.hash === "#deals";
+    $("#tab-stocks").setAttribute("aria-selected", String(!onMtf && !onPicks && !onResearch && !onDeals));
     $("#tab-mtf").setAttribute("aria-selected", String(onMtf));
     $("#tab-picks").setAttribute("aria-selected", String(onPicks));
     $("#tab-research").setAttribute("aria-selected", String(onResearch));
-    $("#list-view").hidden = onMtf || onPicks || onResearch;
+    $("#tab-deals").setAttribute("aria-selected", String(onDeals));
+    $("#list-view").hidden = onMtf || onPicks || onResearch || onDeals;
     $("#mtf-view").hidden = !onMtf;
     $("#picks-view").hidden = !onPicks;
     $("#research-view").hidden = !onResearch;
+    $("#deals-view").hidden = !onDeals;
     if (onMtf) {
       renderMTF();
       const target = prefill && document.getElementById("add-trade");
@@ -2084,6 +2322,9 @@ td.hi { color: var(--deliv); font-weight: 600; }
     } else if (onResearch) {
       renderResearch();
       window.scrollTo(0, researchScroll);
+    } else if (onDeals) {
+      renderDeals();
+      window.scrollTo(0, dealsScroll);
     } else {
       renderChips();
       renderRows();
@@ -2113,12 +2354,14 @@ td.hi { color: var(--deliv); font-weight: 600; }
         if (location.hash === "#mtf") mtfScroll = window.scrollY;
         else if (location.hash === "#picks") picksScroll = window.scrollY;
         else if (location.hash === "#research") researchScroll = window.scrollY;
+        else if (location.hash === "#deals") dealsScroll = window.scrollY;
         else if (!location.hash.startsWith("#s=")) listScroll = window.scrollY;
       };
       $("#tab-stocks").addEventListener("click", () => { leave(); location.hash = ""; });
       $("#tab-mtf").addEventListener("click", () => { if (location.hash !== "#mtf") leave(); location.hash = "mtf"; });
       $("#tab-picks").addEventListener("click", () => { if (location.hash !== "#picks") leave(); location.hash = "picks"; });
       $("#tab-research").addEventListener("click", () => { if (location.hash !== "#research") leave(); location.hash = "research"; });
+      $("#tab-deals").addEventListener("click", () => { if (location.hash !== "#deals") leave(); location.hash = "deals"; });
       route();
     })
     .catch(() => {

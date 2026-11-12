@@ -279,15 +279,45 @@ def main(out, last):
     d = days[-1]
     head = ["Date", "Symbol", "Security Name", "Client Name", "Buy/Sell", "Quantity Traded", "Trade Price / Wght. Avg. Price", "Remarks"]
     blk = round(price["ITC"] * 0.985, 2)
-    for fname, rows in (("block.csv", [[d.strftime("%d-%b-%Y"), "ITC", "ITC LTD", "SOME GLOBAL FUND", "SELL", "36,50,00,000", f"{blk}", "-"],
-                                        [d.strftime("%d-%b-%Y"), "ITC", "ITC LTD", "A MUTUAL FUND A/C LARGE CAP", "BUY", "36,50,00,000", f"{blk}", "-"]]),
-                        ("bulk.csv", [[d.strftime("%d-%b-%Y"), "M&M", "MAHINDRA & MAHINDRA LTD", "<b>ODD NAME & CO</b>", "BUY", "65,00,000",
+    hdb = round(price["HDFCBANK"] * 0.97, 2)   # a promoter's block at a 3% discount, taken by two FIIs
+    ds = d.strftime("%d-%b-%Y")
+    for fname, rows in (("block.csv", [[ds, "ITC", "ITC LTD", "SOME GLOBAL FUND", "SELL", "36,50,00,000", f"{blk}", "-"],
+                                        [ds, "ITC", "ITC LTD", "A MUTUAL FUND A/C LARGE CAP", "BUY", "36,50,00,000", f"{blk}", "-"],
+                                        [ds, "HDFCBANK", "HDFC BANK LTD", "GOLDMAN SACHS BANK EUROPE SE", "BUY", "50,00,000", f"{hdb}", "-"],
+                                        [ds, "HDFCBANK", "HDFC BANK LTD", "SOCIETE GENERALE - ODI", "BUY", "30,00,000", f"{hdb}", "-"],
+                                        [ds, "HDFCBANK", "HDFC BANK LTD", "SOME PROMOTER HOLDINGS LIMITED", "SELL", "80,00,000", f"{hdb}", "-"]]),
+                        ("bulk.csv", [[ds, "M&M", "MAHINDRA & MAHINDRA LTD", "<b>ODD NAME & CO</b>", "BUY", "65,00,000",
                                        f"{price['M&M']:.2f}", "-"],
-                                      [d.strftime("%d-%b-%Y"), "20MICRONS", "20 MICRONS LTD", "SOMEONE", "BUY", "1,00,000", "213.00", "-"]])):
+                                      [ds, "20MICRONS", "20 MICRONS LTD", "SOMEONE", "BUY", "1,00,000", "213.00", "-"],
+                                      # an FII in a stock outside every index list: kept, priced from the full delivery file
+                                      [ds, "20MICRONS", "20 MICRONS LTD", "MORGAN STANLEY ASIA (SINGAPORE) PTE.", "BUY", "2,00,000", "212.00", "-"],
+                                      # the HDFC Bank block again in the bulk list: counted once
+                                      [ds, "HDFCBANK", "HDFC BANK LTD", "GOLDMAN SACHS BANK EUROPE SE", "BUY", "50,00,000", f"{hdb}", "-"],
+                                      # a trading desk buying and selling the same stock in one session
+                                      [ds, "RELIANCE", "RELIANCE INDUSTRIES LTD", "INTEGRATED CORE STRATEGIES (ASIA) PTE. LTD.", "BUY", "10,00,000",
+                                       f"{price['RELIANCE']:.2f}", "-"],
+                                      [ds, "RELIANCE", "RELIANCE INDUSTRIES LTD", "INTEGRATED CORE STRATEGIES (ASIA) PTE. LTD.", "SELL", "9,80,000",
+                                       f"{price['RELIANCE'] * 1.001:.2f}", "-"]])):
         with open(out / fname, "w", newline="") as f:
             w = csv.writer(f)
             w.writerow(head)
             w.writerows(rows)
+    # NSE's deal history (the Large Deals page's API): earlier sessions, plus tonight's HDFC Bank block again
+    def api(day, sym, name, client, side, q, p):
+        return {"BD_DT_DATE": day.strftime("%d-%b-%Y").upper(), "BD_DT_ORDER": day.isoformat() + "T18:30:00.000+00:00",
+                "BD_SYMBOL": sym, "BD_SCRIP_NAME": name, "BD_CLIENT_NAME": client, "BD_BUY_SELL": side,
+                "BD_QTY_TRD": q, "BD_TP_WATP": p, "BD_REMARKS": "-"}
+    d5, d12 = days[-5], days[-12]
+    hist = {"block": [api(d, "HDFCBANK", "HDFC Bank Ltd", "GOLDMAN SACHS BANK EUROPE SE", "BUY", 5000000, hdb),
+                      api(d5, "AXISBANK", "Axis Bank Ltd", "NORGES BANK ON ACCOUNT OF THE GOVERNMENT PENSION FUND GLOBAL", "BUY", 4000000, 1060.5),
+                      api(d5, "AXISBANK", "Axis Bank Ltd", "SOME PE FUND MAURITIUS", "SELL", 4000000, 1060.5),
+                      api(d12, "SBIN", "State Bank of India", "GQG PARTNERS EMERGING MARKETS EQUITY FUND", "SELL", 9000000, 775.0),
+                      api(d12, "SBIN", "State Bank of India", "SBI MUTUAL FUND", "BUY", 9000000, 775.0)],
+            "bulk": [api(d12, "LENSKART", "Lenskart Solutions Ltd", "GOLDMAN SACHS INVESTMENTS MAURITIUS I LIMITED", "BUY", 4440000, 697.15),
+                     api(d12, "LENSKART", "Lenskart Solutions Ltd", "SVF II LIGHTBULB (CAYMAN) LIMITED", "SELL", 27200000, 697.15),
+                     api(d12, "ZZSME", "Some SME Ltd", "SOMEBODY", "BUY", 100000, 12.0)]}
+    for kind, rows in hist.items():
+        (out / f"deals_api_{kind}.json").write_text(json.dumps({"data": rows}))
     flows = [{"category": "DII **", "date": d.strftime("%d-%b-%Y"), "buyValue": "13402.08", "sellValue": "12220.04", "netValue": "1182.04"},
              {"category": "FII/FPI *", "date": d.strftime("%d-%b-%Y"), "buyValue": "16314.46", "sellValue": "15111.32", "netValue": "-4203.14"}]
     (out / "fiidiiTradeReact.json").write_text(json.dumps(flows))

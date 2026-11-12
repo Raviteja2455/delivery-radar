@@ -51,6 +51,9 @@ URLS = {
     "tv": "https://scanner.tradingview.com/india/scan",
     "bulk": "https://nsearchives.nseindia.com/content/equities/bulk.csv",
     "block": "https://nsearchives.nseindia.com/content/equities/block.csv",
+    # the Large Deals page's history: kind is "bulk" or "block", dates DD-MM-YYYY, at most a year at a time
+    "deals_api": ("https://www.nseindia.com/api/historicalOR/bulk-block-short-deals"
+                  "?optionType={kind}_deals&from={a:%d-%m-%Y}&to={b:%d-%m-%Y}"),
     "fiidii": "https://www.nseindia.com/api/fiidiiTradeReact",
     "part": "https://nsearchives.nseindia.com/content/nsccl/fao_participant_oi_{d:%d%m%Y}.csv",
 }
@@ -61,6 +64,10 @@ URLS = {
 LOOKBACK = {"eq": 300, "fo": 45, "idx": 300, "part": 45}    # calendar days kept filled (first run backfills this)
 KEEP_DAYS = {"eq": 800, "fo": 90, "idx": 800, "part": 200}  # day files older than this are deleted
 DEALS_KEEP = 200   # calendar days of bulk and block deals kept
+DEALS_BACK = 90    # calendar days of deals filled from NSE's deal history the first time (in DEALS_STEP-day requests)
+DEALS_STEP = 30
+DEALS_AGAIN = 7    # every night the last week is asked again, so a night whose bulk.csv failed is filled in
+DEALS_SHIP = 60    # sessions of FII and fund deals sent to the app's Deals tab
 RECENT_DAYS = 5    # a failed download this recent stops the run; an older one only pauses the backfill
 FO_FLAG_DAYS = 21  # stored F&O days this recent are fetched again once if they lack the Nifty-expiry flag
 FII_DAYS = 6       # sessions shown in the app's FII table
@@ -231,7 +238,12 @@ def load_config():
     # Stocks kept out of research picks by hand, with the reason: what a screen can't read (a pledge,
     # a governance question, bad loans) is recorded here after reading the company's own filings.
     skip = {str(k).strip().upper(): str(v).strip() for k, v in (cfg.get("research_skip") or {}).items() if str(v).strip()}
-    return {"extra_symbols": extra, "notes": notes, "pick": pick, "research": research, "research_skip": skip}
+    # Deal clients forced to count as FII ("fii") or not ("not_fii"), by any part of the name, where the
+    # name patterns in deal_classifier get one wrong.
+    dn = cfg.get("deal_names") or {}
+    deal_names = {k: [str(x).strip() for x in dn.get(k, []) if str(x).strip()] for k in ("fii", "not_fii")}
+    return {"extra_symbols": extra, "notes": notes, "pick": pick, "research": research, "research_skip": skip,
+            "deal_names": deal_names}
 
 
 # ----------------------------------------------------------------------------- NSE access
@@ -258,6 +270,8 @@ class Source:
         """Return the file's text (or bytes), or None when NSE has no such file."""
         if self.folder:
             name = "fiidiiTradeReact.json" if url == URLS["fiidii"] else url.rsplit("/", 1)[-1]
+            if "bulk-block-short-deals" in url:  # deal history: one file per kind, whatever the dates
+                name = "deals_api_" + ("block" if "block_deals" in url else "bulk") + ".json"
             p = self.folder / name
             if not p.exists():
                 return None
@@ -401,22 +415,144 @@ def parse_idx(text):
     return day, out
 
 
-def parse_deals(text, kind, symbols):
+def deal_row(d, sym, kind, client, side, q, p, name, keep):
+    """One bulk/block deal in the stored shape, or None if it isn't kept (see deal_keeper)."""
+    client = clean_name(client)
+    if not sym or not d or not keep(sym, client):
+        return None
+    x = {"d": d.isoformat(), "s": sym, "k": kind, "cl": client, "bs": (side or "").strip().upper(), "q": q, "p": p}
+    if name and not keep.known(sym):
+        x["n"] = clean_name(name)  # the company's name, kept only for stocks outside the tracked lists
+    return x
+
+
+def parse_deals(text, kind, keep):
+    """NSE's same-day bulk.csv or block.csv."""
     out = []
     for r in csv_rows(text):
-        sym = r.get("Symbol")
-        d = parse_date(r.get("Date"))
-        if sym not in symbols or not d:
-            continue
         price_key = next((k for k in r if k.lower().startswith("trade price")), None)
-        out.append({
-            "d": d.isoformat(), "s": sym, "k": kind,
-            "cl": r.get("Client Name", ""),
-            "bs": (r.get("Buy/Sell") or "").strip().upper(),
-            "q": num(r.get("Quantity Traded")),
-            "p": num(r.get(price_key)) if price_key else None,
-        })
+        x = deal_row(parse_date(r.get("Date")), r.get("Symbol"), kind, r.get("Client Name", ""), r.get("Buy/Sell"),
+                     num(r.get("Quantity Traded")), num(r.get(price_key)) if price_key else None,
+                     r.get("Security Name"), keep)
+        if x:
+            out.append(x)
     return out
+
+
+def parse_deals_api(text, kind, keep):
+    """NSE's deal-history API (the Large Deals page): {"data": [{"BD_DT_DATE": "01-DEC-2025", ...}]}."""
+    try:
+        doc = json.loads(text)
+    except (TypeError, ValueError):
+        return None
+    rows = doc.get("data") if isinstance(doc, dict) else doc
+    if not isinstance(rows, list):
+        return None
+    out = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        x = deal_row(parse_date(str(r.get("BD_DT_DATE") or "")), str(r.get("BD_SYMBOL") or "").strip(), kind,
+                     r.get("BD_CLIENT_NAME") or "", r.get("BD_BUY_SELL"),
+                     num(str(r.get("BD_QTY_TRD") or "")), num(str(r.get("BD_TP_WATP") or "")),
+                     r.get("BD_SCRIP_NAME"), keep)
+        if x:
+            out.append(x)
+    return out
+
+
+# ----------------------------------------------------------------------------- deal participants
+# Who is behind a deal, read from the client name NSE prints. There is no official tag, so this is pattern
+# matching on names, in this order: names config.json forces either way; any mutual fund (always Indian);
+# the Indian arm of a foreign bank or broker ("Goldman Sachs (India) Securities") unless the name also says
+# it is offshore; then foreign names; then Indian insurers and pension funds. Everything else (promoters,
+# trading firms, individuals, companies) is "other".
+#   F = foreign portfolio investor (FII/FPI), D = mutual fund, insurer or pension fund, O = other
+FOREIGN_NAMES = (
+    # banks and brokers' FPI entities, which take most block deals for their clients
+    "GOLDMAN SACHS", "MORGAN STANLEY", "SOCIETE GENERALE", "BNP PARIBAS", "CITIGROUP GLOBAL", "CITIBANK N",
+    "JPMORGAN", "J.P. MORGAN", "J P MORGAN", "J. P. MORGAN", "COPTHALL", "BOFA SECURITIES", "MERRILL LYNCH",
+    "NOMURA", r"\bUBS\b", "HSBC", "BARCLAYS", "DEUTSCHE BANK", "CREDIT SUISSE", "CLSA", "MACQUARIE", "MIZUHO",
+    "MUFG", "SMBC", "DBS BANK", "JEFFERIES", "NATIXIS", "CREDIT AGRICOLE", "CACEIS",
+    # fund managers
+    "VANGUARD", "BLACKROCK", "ISHARES", "FIDELITY", r"\bFMR\b", "GQG", "CAPITAL GROUP", "SMALLCAP WORLD FUND",
+    "NEW WORLD FUND", "AMERICAN FUNDS", "T. ROWE", "T ROWE", "WELLINGTON", "INVESCO", "ABERDEEN", "ABRDN",
+    "SCHRODER", "NORDEA", "NEUBERGER", "TEMPLETON", "MATTHEWS", "WASATCH", "WILLIAM BLAIR", "ASHMORE",
+    "EASTSPRING", "AMUNDI", r"\bAXA\b", "ALLIANZ GLOBAL", "PIMCO", "JANUS", "ARTISAN", "DODGE & COX", "LAZARD",
+    "ROBECO", r"\bDWS\b", "UNION INVESTMENT", "LEGAL AND GENERAL", "LEGAL & GENERAL", "BAILLIE GIFFORD",
+    "FIRST STATE", "STEWART INVESTORS", "PINEBRIDGE", "MANULIFE", "THREADNEEDLE", "COLUMBIA", "METZLER",
+    "PRUDENTIAL HONG KONG", "FACTORY MUTUAL", "AMANSA", "NALANDA", "STEADVIEW", "TRUSTBRIDGE", "KOTAK MAHINDRA (INTERNATIONAL)",
+    # hedge funds and trading houses registered as FPIs
+    "INTEGRATED CORE STRATEGIES", "MILLENNIUM", "CITADEL", "JANE STREET", "GHISALLO", "VIRIDIAN", "NORTH ROCK",
+    "OXBOW", "VITTORIA", "DYMON", "SEGANTII", "OPTIVER", "ELLIOTT", "TIGER GLOBAL", "MARSHALL WACE", "QUADRATURE",
+    # sovereign funds, pension funds, development banks
+    "NORGES BANK", "GOVERNMENT OF SINGAPORE", "MONETARY AUTHORITY", "ABU DHABI INVESTMENT", "KUWAIT INVESTMENT",
+    "QATAR INVESTMENT", "PUBLIC INVESTMENT FUND", "CAISSE DE DEPOT", "CANADA PENSION", "CPP INVESTMENT",
+    "ONTARIO TEACHERS", "OMERS", "BRITISH COLUMBIA INVESTMENT", "ALBERTA INVESTMENT", "CALIFORNIA PUBLIC",
+    "CALIFORNIA STATE TEACHERS", "RETIREMENT SYSTEM", "RETIREMENT FUND", "PUBLIC SCHOOL EMPLOYEES",
+    "STATE OF WISCONSIN", "NEW YORK STATE", "INTERNATIONAL MONETARY FUND", "INTERNATIONAL FINANCE CORPORATION",
+    "ASIAN DEVELOPMENT BANK", "TEMASEK", "KHAZANAH", "MUBADALA", "STICHTING", "ALASKA PERMANENT", "UNIVERSITY",
+    "ENDOWMENT", "SOVEREIGN",
+    # tell-tale words in fund names and registered addresses
+    "MAURITIUS", "SINGAPORE", "CAYMAN", "LUXEMBOURG", "IRELAND", "HONG KONG", "NETHERLANDS", "DELAWARE",
+    r"\(UK\)", r"\bU\.K\.", r"\bPLC\b", r"\bSICAV\b", r"\bPTE\b", r"\bGMBH\b", r"\bAG\b", r"\bL\.?P\.?$", r"\bLLC\b",
+    "MASTER FUND", "OFFSHORE", "EMERGING MARKET", r"\bODI\b", r"\bFPI\b", r"\bIFSC\b", "GLOBAL FUND",
+)
+OFFSHORE_NAMES = r"MAURITIUS|SINGAPORE|CAYMAN|LUXEMBOURG|IRELAND|HONG KONG|\bIFSC\b|\bODI\b|\bFPI\b"
+MF_NAMES = r"MUTUAL FUND|\bMF\b"
+DOMESTIC_NAMES = (r"LIFE INSURANCE|INSURANCE CO|GENERAL INSURANCE|ASSURANCE|NATIONAL PENSION|PENSION SYSTEM|"
+                  r"PROVIDENT FUND|\bLIC OF INDIA\b")
+INDIA_ARM = r"\(INDIA\)|\bINDIA\s+(PRIVATE|PVT|LIMITED|LTD|COMPANY)\b"
+
+
+def clean_name(s):
+    """A client or company name with any HTML NSE left in it removed and spaces tidied."""
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]*>", " ", str(s or ""))).strip()
+
+
+def deal_classifier(cfg):
+    """A function from client name to "F", "D" or "O". config.json's "deal_names" adds names either way:
+    {"fii": ["SOME FUND"], "not_fii": ["SOME INDIAN FIRM"]} (parts of names, any case)."""
+    names = cfg.get("deal_names") or {}
+    force_f = [s.upper() for s in names.get("fii", []) if s]
+    force_o = [s.upper() for s in names.get("not_fii", []) if s]
+    foreign = re.compile("|".join(f"(?:{p})" for p in FOREIGN_NAMES))
+    offshore, mf, domestic, india = (re.compile(p) for p in (OFFSHORE_NAMES, MF_NAMES, DOMESTIC_NAMES, INDIA_ARM))
+    memo = {}
+
+    def who(client):
+        n = clean_name(client).upper()
+        if n in memo:
+            return memo[n]
+        if any(s in n for s in force_o):
+            t = "O"
+        elif any(s in n for s in force_f):
+            t = "F"
+        elif mf.search(n):
+            t = "D"
+        elif india.search(n) and not offshore.search(n):
+            t = "O"
+        elif foreign.search(n):
+            t = "F"
+        elif domestic.search(n):
+            t = "D"
+        else:
+            t = "O"
+        memo[n] = t
+        return t
+    return who
+
+
+def deal_keeper(symbols, who):
+    """Which deals are stored: every deal in a tracked stock, and an FII's or a fund's deal in any stock."""
+    def keep(sym, client):
+        return sym in symbols or who(client) != "O"
+    keep.known = lambda sym: sym in symbols
+    return keep
+
+
+def deal_key(x):
+    return (x["d"], x["s"], x["k"], clean_name(x["cl"]).upper(), x["bs"], round(x["q"] or 0), round(x["p"] or 0, 2))
 
 
 def parse_fiidii(text):
@@ -568,6 +704,67 @@ def holiday_copies(eq):
     return {d for prev, d in zip(days, days[1:]) if eq[d] == eq[prev]}
 
 
+def fetch_deal_history(src, meta, today, keep, add):
+    """Deals from NSE's deal-history API: the last DEALS_AGAIN days every night (so a night whose bulk.csv
+    failed is filled in), and, until it is done, the DEALS_BACK days before that, a window at a time. NSE's
+    API sometimes refuses cloud servers; then the same-day files alone keep the record going, and the next
+    run tries again. meta["deals_from"] is the first day the history has covered."""
+    have = meta.get("deals_from")
+    start = today - timedelta(days=DEALS_BACK)
+    windows = [(today - timedelta(days=DEALS_AGAIN), today)]
+    if not have or have > start.isoformat():
+        end = date.fromisoformat(have) - timedelta(days=1) if have else windows[0][0] - timedelta(days=1)
+        while end >= start:
+            a = max(start, end - timedelta(days=DEALS_STEP - 1))
+            windows.append((a, end))
+            end = a - timedelta(days=1)
+    added = 0
+    for a, b in windows:
+        got = []
+        for kind in ("bulk", "block"):
+            try:
+                t = src.get(URLS["deals_api"].format(kind=kind, a=a, b=b))
+            except RuntimeError:
+                t = None
+            rows = parse_deals_api(t, kind.upper(), keep) if t else None
+            if rows is None:
+                print(f"NSE's deal history did not answer for {a:%d %b} to {b:%d %b}; tonight uses the same-day files only.")
+                meta["deals_from"] = have
+                return added
+            got.extend(rows)
+        added += add(got)
+        if not have or a.isoformat() < have:
+            have = a.isoformat()
+    meta["deals_from"] = have
+    print(f"Deal history: {added} new deals; covered from {have}")
+    return added
+
+
+def fetch_deal_prices(src, deals, who, uset, today):
+    """Latest close of stocks with an FII or fund deal that the stored delivery files don't cover (outside
+    the Nifty 500), read once from the latest full delivery file into data/dealpx.json."""
+    stored = sorted(p.stem for p in (DATA / "eq").glob("*.json"))
+    if not stored:
+        return
+    last = stored[-1]
+    cut = (date.fromisoformat(last) - timedelta(days=int(DEALS_SHIP * 1.6))).isoformat()
+    syms = {x["s"] for x in deals if x["d"] >= cut and x["s"] not in uset and who(x["cl"]) != "O"}
+    old = jload(DATA / "dealpx.json", {})
+    if old.get("d") == last and syms <= set(old.get("rows", {})):
+        return
+    rows = {}
+    if syms:
+        try:
+            blob = src.get(URLS["eq"].format(d=date.fromisoformat(last)))
+        except RuntimeError as e:
+            print(f"Prices of out-of-index deal stocks unavailable: {e}")
+            return
+        day, rows = parse_eq(blob, syms) if blob else (None, {})
+        if not day or day.isoformat() != last:
+            return
+    jsave(DATA / "dealpx.json", {"d": last, "rows": {s: [rnd(r[4]), rnd(r[0])] for s, r in sorted(rows.items())}})
+
+
 def update(src, today=None):
     now = datetime.now(IST)
     today = today or now.date()
@@ -672,21 +869,33 @@ def update(src, today=None):
                 jsave(path, rows)
             fetched[kind] += 1
 
-    deals = jload(DATA / "deals.json", [])
-    seen = {(x["d"], x["s"], x["k"], x["cl"], x["bs"], x["q"], x["p"]) for x in deals}
+    who = deal_classifier(cfg)
+    keep = deal_keeper(uset, who)
+    deals = [x for x in jload(DATA / "deals.json", []) if keep(x["s"], x["cl"])]
+    seen = {deal_key(x) for x in deals}
+
+    def add(rows):
+        n = 0
+        for x in rows:
+            k = deal_key(x)
+            if k not in seen:
+                seen.add(k)
+                deals.append(x)
+                n += 1
+        return n
+
     for kind in ("bulk", "block"):
         try:
             t = src.get(URLS[kind])
         except RuntimeError as e:
             print(f"{kind} deals unavailable: {e}")
             t = None
-        for x in parse_deals(t, kind.upper(), uset) if t else []:
-            key = (x["d"], x["s"], x["k"], x["cl"], x["bs"], x["q"], x["p"])
-            if key not in seen:
-                seen.add(key)
-                deals.append(x)
+        add(parse_deals(t, kind.upper(), keep) if t else [])
+    fetch_deal_history(src, meta, today, keep, add)
     cut = (today - timedelta(days=DEALS_KEEP)).isoformat()
-    jsave(DATA / "deals.json", sorted((x for x in deals if x["d"] >= cut), key=lambda x: (x["d"], x["s"])))
+    deals = sorted((x for x in deals if x["d"] >= cut), key=lambda x: (x["d"], x["s"], x["k"], x["bs"], x["cl"]))
+    jsave(DATA / "deals.json", deals)
+    fetch_deal_prices(src, deals, who, uset, today)
 
     flows = jload(DATA / "fiidii.json", {})
     try:
@@ -1868,6 +2077,104 @@ def track_block(adj, eq, days, idx, symbols):
     return {"dates": dates, "nifty": [idx.get(d, {}).get("nifty") for d in dates], "s": series, "k": factors}
 
 
+ROUND_TRIP = 0.10  # a client who bought and sold a stock in one session to within 10% was trading it, not investing
+SAME_PRICE = 0.0025  # deals within 0.25% of each other's price on one session are taken as the two sides of one trade
+
+
+def merge_bulk_block(rows):
+    """NSE lists a block-window trade again in the day's bulk deals when it passes 0.5% of the company, and a
+    bulk-deal row is the client's whole day. So where a client has both on one stock, side and session, the
+    block rows stay and the bulk row keeps only what it adds (quantity and value beyond the block trades)."""
+    groups = {}
+    for x in rows:
+        groups.setdefault((x["d"], x["s"], clean_name(x["cl"]).upper(), x["bs"]), []).append(x)
+    out = []
+    for g in groups.values():
+        blocks = [x for x in g if x["k"] == "BLOCK"]
+        bulks = [x for x in g if x["k"] != "BLOCK"]
+        out.extend(blocks)
+        if not blocks or not bulks:
+            out.extend(bulks)
+            continue
+        bq = sum(x["q"] or 0 for x in bulks)
+        kq = sum(x["q"] or 0 for x in blocks)
+        rest = bq - kq
+        if rest <= 0.005 * bq:
+            continue  # the bulk row is the block trade again
+        bv = sum((x["q"] or 0) * (x["p"] or 0) for x in bulks)
+        kv = sum((x["q"] or 0) * (x["p"] or 0) for x in blocks)
+        p = (bv - kv) / rest
+        if not (0.5 * bulks[0]["p"] <= p <= 2 * bulks[0]["p"]):
+            p = bulks[0]["p"]  # the averages don't reconcile; keep NSE's own figure
+        out.append(dict(bulks[0], q=rest, p=p))
+    return sorted(out, key=lambda x: (x["d"], x["s"], x["k"], x["bs"], x["cl"]))
+
+
+def deals_block(deals, days, adj, eq, meta, who, asof):
+    """FII and fund deals of the last DEALS_SHIP sessions, in every stock, for the app's Deals tab.
+
+    Each row gets t ("F" for an FII, "D" for a mutual fund, insurer or pension fund); rt when the same client
+    also traded the other way that session to within 10% (trading, not a position); x, the clients on the
+    other side at the same price, each with its own F/D/O (who sold to the FII, or bought from it); and pa, the deal price restated
+    for a split or bonus since, when there was one, so it compares with today's price."""
+    ship = days[-DEALS_SHIP:]
+    recent = merge_bulk_block([x for x in deals if x["d"] >= ship[0] and x["p"] and x["q"]])
+    sides, same_day = {}, {}
+    for x in recent:
+        b = sides.setdefault((x["d"], x["s"], clean_name(x["cl"]).upper()), [0.0, 0.0])
+        b[0 if x["bs"] == "BUY" else 1] += x["q"]
+        same_day.setdefault((x["d"], x["s"]), []).append(x)
+    at = {}
+
+    def factor(sym, d):
+        if sym not in at:
+            at[sym] = {r["d"]: r["c"] for r in adj.get(sym) or []}
+        c, raw = at[sym].get(d), (eq.get(d, {}).get(sym) or [None] * 5)[4]
+        return c / raw if c and raw else 1.0
+
+    rows, syms = [], set()
+    for x in recent:
+        t = who(x["cl"])
+        if t == "O":
+            continue
+        me = clean_name(x["cl"]).upper()
+        b, s = sides[(x["d"], x["s"], me)]
+        other = sorted((y for y in same_day[(x["d"], x["s"])] if y["bs"] != x["bs"] and clean_name(y["cl"]).upper() != me
+                        and abs(y["p"] / x["p"] - 1) <= SAME_PRICE), key=lambda y: -y["q"])
+        cp = [[n, who(n)] for n in dict.fromkeys(clean_name(y["cl"]) for y in other)]
+        r = {"d": x["d"], "s": x["s"], "k": x["k"], "cl": clean_name(x["cl"]), "bs": x["bs"],
+             "q": whole(x["q"]), "p": rnd(x["p"]), "t": t}
+        if b > 0 and s > 0 and abs(b - s) <= ROUND_TRIP * max(b, s):
+            r["rt"] = 1
+        if cp:
+            r["x"] = cp[:3]
+            if len(cp) > 3:
+                r["xn"] = len(cp)
+        k = factor(x["s"], x["d"])
+        if abs(k - 1) > 1e-4:
+            r["pa"] = rnd(x["p"] * k)
+        rows.append(r)
+        syms.add(x["s"])
+
+    n50, n100, n500 = (set(meta.get(k, [])) for k in ("nifty50", "nifty100", "nifty500"))
+    names, caps = meta.get("names", {}), meta.get("cap", {})
+    dealpx = jload(DATA / "dealpx.json", {})
+    px, nm, grp, cap = {}, {}, {}, {}
+    for s in sorted(syms):
+        a = adj.get(s)
+        if a and a[-1]["d"] == asof and a[-1]["c"]:
+            px[s] = [rnd(a[-1]["c"]), rnd(pct(a[-1]["c"], a[-1]["pc"]))]
+        elif dealpx.get("d") == asof and s in dealpx.get("rows", {}):
+            c, pc = dealpx["rows"][s]
+            px[s] = [c, rnd(pct(c, pc))]
+        nm[s] = (names.get(s) or {}).get("n") or next((x["n"] for x in deals if x["s"] == s and x.get("n")), s)
+        grp[s] = 50 if s in n50 else 100 if s in n100 else 500 if s in n500 else 0
+        if caps.get(s):
+            cap[s] = caps[s]
+    return {"days": ship, "rows": rows, "px": px, "nm": nm, "g": grp, "cap": cap,
+            "from": min((x["d"] for x in deals), default=None), "hist": meta.get("deals_from")}
+
+
 def build(make_picks=False):
     """Rebuild docs/data.json from the stored history. New picks are named only on the nightly update,
     never by a rebuild done by hand."""
@@ -1884,6 +2191,7 @@ def build(make_picks=False):
     fo = {p.stem: jload(p, {}) for p in (DATA / "fo").glob("*.json")}
     idx = {p.stem: jload(p, {}) for p in (DATA / "idx").glob("*.json")}
     deals = jload(DATA / "deals.json", [])
+    who = deal_classifier(cfg)
     flows = jload(DATA / "fiidii.json", {})
     part = {p.stem: jload(p, {}) for p in (DATA / "part").glob("*.json")}
     asof = days[-1]
@@ -1899,12 +2207,13 @@ def build(make_picks=False):
     picks, tonight = build_picks(adj, days, idx, meta, cfg, names, asof, make_picks)
     research, own = build_research(days, adj, idx, meta, cfg, names, asof, make_picks)
 
+    stock_deals = merge_bulk_block([x for x in deals if x["d"] >= det_days[0] and x["s"] in set(universe)])
     stocks = []
     for sym in universe:
         rows = adj.get(sym)
         if not rows or rows[-1]["d"] != asof:
             continue  # did not trade on the latest day
-        st = stock_metrics(sym, rows, fo, deals, det_days, names, cfg["notes"])
+        st = stock_metrics(sym, rows, fo, stock_deals, det_days, names, cfg["notes"])
         st["grp"] = 50 if sym in n50 else 100 if sym in n100 else 0  # Nifty 50, Next 50, or added by hand
         st["pk"] = tonight.get(sym)
         st["rs"] = own.get(sym)
@@ -1923,7 +2232,8 @@ def build(make_picks=False):
         "picks": picks,
         "research": research,
         "universe": "Nifty 100" if len(n100) >= 90 else "Nifty 50",
-        "deals": [x for x in deals if x["d"] >= det_days[0] and x["s"] in set(universe)][-80:],
+        "deals": [dict(x, t=who(x["cl"])) for x in stock_deals][-80:],
+        "fd": deals_block(deals, days, adj, eq, meta, who, asof),
         "have": {"fo": asof in fo, "idx": asof in idx, "flows": asof in flows, "part": "FII" in part.get(asof, {})},
         "mtf": {"stop_buffer_pct": STOP_BUFFER * 100, "min_stop_pct": MIN_STOP_PCT},
         "extra": [s for s in cfg["extra_symbols"] if s not in n50 | n100],
