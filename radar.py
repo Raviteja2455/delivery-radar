@@ -9,8 +9,9 @@ Data comes from NSE's public end-of-day files: security-wise delivery (sec_bhavd
 the F&O bhavcopy, index closes, bulk/block deals, participant-wise F&O open interest and the
 provisional FII/DII figures. History is kept as one small JSON file per trading day under data/.
 
-Every night the script also ranks all Nifty 100 stocks for a three-month swing pick, names one
-pick every ten days and tracks how each pick did; the pick log is data/picks.json.
+Every night the script also ranks all Nifty 100 stocks for a three-month swing pick, names every
+stock that meets the pick criteria that night (no waiting period between picks) and tracks how each
+pick did; the pick log is data/picks.json.
 
 It also runs a research screen over the Nifty 500 (large, mid and small caps) for 6-month to
 2-year investments: quality checks, a fair value from four methods, and a buy only at a margin of
@@ -191,9 +192,10 @@ def calendar_days(start, end):
         d += timedelta(days=1)
 
 
-# Three-month swing pick: one stock every `every_days` calendar days, aiming for `target_pct` within
+# Three-month swing pick: a stock is named on any night it passes the trend checks and scores `min_score`
+# or more out of 100, with no waiting period between picks. Each pick aims for `target_pct` within
 # `window_days`, with a closing-basis stop `stop_pct` under the entry. config.json's "pick" block overrides these.
-PICK_DEFAULTS = {"every_days": 10, "target_pct": 5.0, "window_days": 91, "stop_pct": 8.0}
+PICK_DEFAULTS = {"min_score": 90.0, "target_pct": 5.0, "window_days": 91, "stop_pct": 8.0}
 
 
 # Research portfolio: 6-month to 2-year investments from the Nifty 500, bought only at a margin of safety
@@ -224,7 +226,7 @@ def load_config():
     pick = dict(PICK_DEFAULTS)
     for k, v in (cfg.get("pick") or {}).items():
         if k in pick and isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
-            pick[k] = int(v) if k in ("every_days", "window_days") else float(v)
+            pick[k] = int(v) if k == "window_days" else float(v)
     extra = [str(s).strip().upper() for s in cfg.get("extra_symbols", []) if str(s).strip()]
     notes = {}
     for sym, n in (cfg.get("notes") or {}).items():
@@ -1353,9 +1355,10 @@ def fii_view(r, streak, pos):
 
 
 # ----------------------------------------------------------------------------- three-month swing pick
-# One stock every ten days from the Nifty 100, aiming for +5% inside three months. The rule looks for a
-# stock already in an uptrend that funds are taking delivery of, and avoids one that has just run.
-# It reads only prices and delivery, so it can be replayed over the stored history.
+# Nifty 100 stocks aiming for +5% inside three months. The rule looks for a stock already in an uptrend
+# that funds are taking delivery of, and avoids one that has just run. A stock is named on the night it
+# meets the criteria, whenever that is: two picks can come on consecutive nights or on the same night,
+# and some weeks bring none. It reads only prices and delivery, so it can be replayed over the stored history.
 PICK_HISTORY = 63          # sessions of history a stock needs before it can be ranked (about three months)
 PICK_COVERAGE = 0.8        # share of the universe that must be rankable before a pick is made
 PICK_MAX_EXT = 8.0         # gate: not more than this % above the 20-day average, or up this much in 5 sessions
@@ -1431,15 +1434,19 @@ def pick_candidates(adj, pos, symbols, day):
     return feats, pick_scores(feats) if feats else []
 
 
-def pick_choose(feats, order, day, recent, notes):
-    """The best-scoring stock that passes the gates, was not picked within the window, and has no
-    negative institutional note dated on or before `day`."""
-    for s in order:
+def pick_matches(feats, order, day, recent, notes, min_score):
+    """Every stock that meets the pick criteria on `day`, best score first: it passes the gates, scores
+    `min_score` or more, was not picked within the window, and has no negative institutional note dated
+    on or before `day`. The score is compared as the app shows it, to one decimal."""
+    out = []
+    for s in order:  # best score first
+        if rnd(feats[s]["sc"], 1) < min_score:
+            break
         note = notes.get(s)
         barred = note and note["bias"] == -1 and (not note["as_of"] or note["as_of"] <= day)
         if feats[s]["ok"] and s not in recent and not barred:
-            return s
-    return None
+            out.append(s)
+    return out
 
 
 def pick_why(f):
@@ -1524,7 +1531,8 @@ def pick_stats(items, base):
 
 
 def build_picks(adj, days, idx, meta, cfg, names, asof, make_picks=True):
-    """Make tonight's pick if one is due, replay the rule over the stored history, and score both.
+    """Name every stock that meets the pick criteria tonight, replay the rule over the stored history,
+    and score both.
 
     Returns the app's "picks" block and each ranked stock's readings for tonight. Live picks are kept
     in data/picks.json with their latest result, so they outlast the day files they were scored from."""
@@ -1550,21 +1558,21 @@ def build_picks(adj, days, idx, meta, cfg, names, asof, make_picks=True):
     feats, order = pick_candidates(adj, pos, pool, asof)
     ready = enough(feats)
 
-    # Tonight's pick, when one is due.
-    last_d = max((p["d"] for p in live), default=None)
-    due = plus_days(last_d, rules["every_days"]) if last_d else asof
+    def recent():  # stocks picked inside the window; they are not named again until it has passed
+        cut = plus_days(asof, -rules["window_days"])
+        return {p["s"] for p in live if p["d"] >= cut}
+
+    # Tonight's picks: every stock that meets the criteria, however recently the last pick was made.
+    # A second run on the same night adds nothing, because tonight's picks are already in the window.
     note = None
     if not ready:
         note = ("The Nifty 100 list or its three months of history isn't complete yet, so no pick is made. "
                 "It fills in over the next nightly runs.")
-    elif asof >= due and make_picks:
-        cut = plus_days(asof, -rules["window_days"])
-        s = pick_choose(feats, order, asof, {p["s"] for p in live if p["d"] >= cut}, cfg["notes"])
-        if s:
+    elif make_picks:
+        for s in pick_matches(feats, order, asof, recent(), cfg["notes"], rules["min_score"]):
             live.append({"d": asof, "s": s, "why": pick_why(feats[s]), "rules": dict(rules)})
-            due = plus_days(asof, rules["every_days"])
-        else:
-            note = "A pick is due, but no Nifty 100 stock passes the trend checks tonight. The rule looks again every night."
+    # How close the next pick is: the best score among the stocks that pass the checks and can still be picked.
+    waiting = pick_matches(feats, order, asof, recent(), cfg["notes"], 0) if ready else []
 
     out, base = [], {"live": [], "bt": []}
 
@@ -1584,31 +1592,25 @@ def build_picks(adj, days, idx, meta, cfg, names, asof, make_picks=True):
             out.append(item(p["d"], p["s"], p.get("why"), p["res"], "live", r))
     jsave(DATA / "picks.json", {"picks": sorted(live, key=lambda p: p["d"])})
 
-    # Replay: the same rule on the same ten-day grid, counted back from the first live pick.
+    # Replay: the same rule on every stored night before the first live pick.
     anchor = min((p["d"] for p in live), default=asof)
-    grid, g = [], plus_days(anchor, -rules["every_days"])
-    while days and g >= days[0]:
-        grid.append(g)
-        g = plus_days(g, -rules["every_days"])
-    grid.reverse()
     past = []
-    for k, g in enumerate(grid):
-        end = grid[k + 1] if k + 1 < len(grid) else anchor
-        for d in (x for x in days if g <= x < end):
-            f, o = pick_candidates(adj, pos, pool, d)
-            if not enough(f):
-                continue
-            cut = plus_days(d, -rules["window_days"])
-            s = pick_choose(f, o, d, {q["s"] for q in past if q["d"] >= cut}, cfg["notes"])
-            if s:
-                past.append({"d": d, "s": s})
-                out.append(item(d, s, pick_why(f[s]), pick_outcome(adj[s], pos[s][d], rules, asof, nifty_on), "bt", rules))
-                everyone(d, rules, "bt")
-                break
+    for d in days:
+        if d >= anchor:
+            break
+        f, o = pick_candidates(adj, pos, pool, d)
+        if not enough(f):
+            continue
+        cut = plus_days(d, -rules["window_days"])
+        for s in pick_matches(f, o, d, {q["s"] for q in past if q["d"] >= cut}, cfg["notes"], rules["min_score"]):
+            past.append({"d": d, "s": s})
+            out.append(item(d, s, pick_why(f[s]), pick_outcome(adj[s], pos[s][d], rules, asof, nifty_on), "bt", rules))
+            everyone(d, rules, "bt")
 
     out.sort(key=lambda x: (x["d"], x["src"] == "live"), reverse=True)
     block = {
-        "rules": rules, "ready": ready, "note": note, "due": due,
+        "rules": rules, "ready": ready, "note": note,
+        "next": {"s": waiting[0], "sc": rnd(feats[waiting[0]]["sc"], 1)} if waiting else None,
         "parts": [[k, w, label] for k, w, label in PICK_PARTS],
         "max_ext": PICK_MAX_EXT, "ranked": len(feats), "passing": sum(1 for s in feats if feats[s]["ok"]),
         "top": [s for s in order if feats[s]["ok"]][:5],
@@ -2326,7 +2328,9 @@ def build(make_picks=False):
     jsave(OUT, out)
     newest = next((x for x in picks["list"] if x["src"] == "live"), None)
     print(f"Built {OUT.relative_to(ROOT)}: {len(stocks)} stocks, data as of {asof}; "
-          + (f"latest pick {newest['s']} ({newest['d']}), next due {picks['due']}" if newest else "no pick yet"))
+          + (f"latest pick {newest['s']} ({newest['d']})" if newest else "no pick yet")
+          + (f"; best stock still waiting: {picks['next']['s']} at {picks['next']['sc']} (a pick needs {picks['rules']['min_score']:g})"
+             if picks["next"] else ""))
     f, held = research["funnel"], [p for p in research["picks"] if not p.get("done")]
     print(f"Research: {f['quality']} of {f['universe']} pass the quality checks, {f['buy']} in the buy zone; "
           + (f"open picks: {', '.join(p['s'] for p in held)}" if held else "no open research pick"))

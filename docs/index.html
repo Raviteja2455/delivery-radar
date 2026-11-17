@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Delivery Radar</title>
-<meta name="description" content="Nifty 100 delivery percentage, volume, futures buildup, bulk/block deals and a three-month swing pick every ten days, refreshed every weekday night from NSE.">
+<meta name="description" content="Nifty 100 delivery percentage, volume, futures buildup, bulk/block deals and three-month swing picks named whenever a stock qualifies, refreshed every weekday night from NSE.">
 <meta name="theme-color" content="#F3F5F8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0F1A2B" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2315233B'/%3E%3Crect x='6' y='13' width='20' height='6' rx='1.5' fill='%23D6DFF5'/%3E%3Crect x='6' y='13' width='13' height='6' rx='1.5' fill='%237EA2FF'/%3E%3C/svg%3E">
@@ -337,7 +337,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         <ol id="sig-help"></ol>
         <p>The live strip shows GIFT Nifty, Brent crude in US$ (WTI underneath) and USD/INR, with MCX gold (₹ per 10 g) and silver (₹ per kg) below, refreshed every 20 seconds while the app is open. A green dot means that market is trading now. GIFT Nifty, USD/INR and MCX are real time; crude runs 10 minutes behind. Each uses its most-traded contract, named after the label. When MCX trading moves to the next month ahead of expiry, the label changes month and the price shifts by the gap between the two contracts. Outside NSE hours the line under the strip compares GIFT Nifty with the close of the Nifty futures for the same month, which is the usual read on how the next session will open.</p>
         <p>The band at the top sets the size of swing trades. All of them are in cash, with no MTF. Green (an uptrend) means half size, because breakouts taken in green markets did worst in the 2020–26 backtests; amber and red mean full size. The Swing tab runs the full entry, sizing and exit rules on every stock and explains the evidence under <i>The rules this tab applies</i>.</p>
-        <p>The Picks tab ranks every Nifty 100 stock each night and names one three-month swing pick every ten days, aiming for at least +5%. It then tracks every pick, and a replay of the same rule on past data, so you can see how often the target was reached. The Swing tab stays on the Nifty 50, the stocks its plan was tested on. Log the picks you buy there, like trades on the Swing tab: every nightly update refreshes each one's gain and says when the rule would sell.</p>
+        <p>The Picks tab ranks every Nifty 100 stock each night and names a three-month swing pick whenever a stock meets the pick criteria, aiming for at least +5%. There is no waiting period between picks: two can come in the same week, and some weeks bring none. It then tracks every pick, and a replay of the same rule on past data, so you can see how often the target was reached. The Swing tab stays on the Nifty 50, the stocks its plan was tested on. Log the picks you buy there, like trades on the Swing tab: every nightly update refreshes each one's gain and says when the rule would sell.</p>
         <p>The Research tab screens the Nifty 500 (large, mid and small caps) for investments of six months to two years. It keeps only profitable, well-financed, growing companies, works out a fair value four ways, and names a stock only when the price is well below it and no longer falling. It names every stock that qualifies, each sized at ₹1 lakh, and follows every pick to its exit; which ones you take depends on your budget. Most nights it names nothing: waiting for price is part of the method.</p>
         <p>The Deals tab lists bulk and block deals by FIIs (and, if you choose, by Indian mutual funds and insurers) in every NSE stock: who bought or sold, how much, at what price, who was on the other side, and whether the stock is holding above the price they paid. Filter by side, period, index, size and deal type.</p>
         <p>FII activity, inside the band, shows each session's net cash buying or selling by foreign investors (NSE's provisional figure) and how their index futures, calls and puts changed, from NSE's participant-wise open interest. A positive futures or calls number, or a negative puts number, is the bullish side. The verdict under the table weighs the latest day's cash, futures and options: when they all agree it says bullish or bearish, otherwise it leans with the majority. On Nifty's weekly expiry (marked *), option changes include contracts that simply expired. The tile beside VIX shows how much of FIIs' index-futures position is long.</p>
@@ -1118,9 +1118,10 @@ td.hi { color: var(--deliv); font-weight: 600; }
       h("p", { class: "foot", text: "Checks run on NSE's closing data, so act in the next session. For information only, not investment advice." }));
   }
 
-  // ---------------------------------------------------------------- picks: a three-month swing pick every ten days
-  // The nightly job ranks every Nifty 100 stock, names a pick when one is due and scores every pick it has
-  // made, plus a replay of the same rule on the stored history. Nothing here is stored on the phone.
+  // ---------------------------------------------------------------- picks: three-month swing picks, named whenever a stock qualifies
+  // The nightly job ranks every Nifty 100 stock, names every stock that meets the pick criteria that night
+  // and scores every pick it has made, plus a replay of the same rule on the stored history. Nothing here
+  // is stored on the phone.
   const pstate = { group: null, status: "all", sort: "new" };
   let picksScroll = 0;
   const PICK_STATUS = { new: ["Buy at next open", "mtf"], open: ["Open", ""], target: ["Target hit", "lb"],
@@ -1162,20 +1163,42 @@ td.hi { color: var(--deliv); font-weight: 600; }
   }
   function pickScoreCard(st) {
     if (!DATA.picks || !st.pk) return null;
-    const w = st.pk, n = DATA.picks.ranked;
+    const w = st.pk, n = DATA.picks.ranked, r = DATA.picks.rules, bar = plain(r.min_score);
     return h("details", { class: "card" },
-      h("summary", { text: `3-month pick score: ${fmt(w.sc, 0)} of 100, rank ${w.rank} of ${n}` }),
-      h("p", { class: "note", style: "margin-top:0", text: w.ok
-        ? "Passes both trend checks, so it can be picked when a pick is due."
-        : "Fails a trend check tonight, so it can't be picked whatever its score." }),
+      h("summary", { text: `3-month pick score: ${fmt(w.sc, 1)} of 100, rank ${w.rank} of ${n}` }),
+      h("p", { class: "note", style: "margin-top:0", text: !w.ok
+        ? "Fails a trend check tonight, so it can't be picked whatever its score."
+        : w.sc >= r.min_score
+          ? `Passes both trend checks and scores ${bar} or more, so it meets the pick criteria tonight. The nightly update names it unless it was picked in the last ${r.window_days} days or has a negative institutional note.`
+          : `Passes both trend checks, but a pick needs a score of ${bar} or more.` }),
       whyBlock(w, st.c));
   }
-  function latestPickCard(P) {
-    const p = P.list.find((x) => x.src === "live");
-    if (!p) {
-      return h("section", { class: "card" }, h("h3", { text: "No pick yet" }),
-        h("p", { class: "note", style: "margin-top:0", text: P.note || "The first pick is made by the next nightly run." }));
+  // What the rule did on the latest close: how many picks it named, or how far the best stock is from the bar.
+  function pickStatus(P) {
+    if (P.note) return P.note;
+    const r = P.rules, on = `on the ${shortDate(DATA.asof)} close`, nx = P.next;
+    const n = P.list.filter((x) => x.src === "live" && x.d === DATA.asof).length;
+    return (n ? `${n === 1 ? "1 stock" : n + " stocks"} met the pick criteria ${on}.`
+      : nx && nx.sc >= r.min_score ? `${nx.s} meets the pick criteria ${on} (score ${fmt(nx.sc, 1)}). The next nightly update names it if it still does.`
+      : nx ? `No new pick ${on}: a pick needs a score of ${plain(r.min_score)} or more, and the closest stock that passes the trend checks is ${nx.s} at ${fmt(nx.sc, 1)}.`
+      : `No new pick ${on}: no stock that can still be picked passes the trend checks.`)
+      + " The rule checks every night and names a pick whenever a stock qualifies; there is no waiting period between picks.";
+  }
+  // The picks to act on: every live pick named in the last week, newest first, or else the most recent one.
+  function latestPickCards(P) {
+    const live = P.list.filter((x) => x.src === "live");
+    if (!live.length) {
+      return [h("section", { class: "card" }, h("h3", { text: "No pick yet" }),
+        h("p", { class: "note", style: "margin-top:0", text: pickStatus(P) }))];
     }
+    const week = live.filter((x) => daysBetween(x.d, DATA.asof) < 7), shown = week.length ? week : live.slice(0, 1);
+    return [
+      shown.length > 1 ? h("p", { class: "market", style: "margin:12px 2px 0", text: `${shown.length} picks in the last week, newest first. Each stands on its own; take them as your budget allows.` }) : null,
+      ...shown.map((p) => pickCard(P, p)),
+      h("p", { class: "market", style: "margin:12px 2px 0", text: pickStatus(P) }),
+    ];
+  }
+  function pickCard(P, p) {
     const st = DATA.stocks.find((x) => x.s === p.s), r = p.rules || P.rules, isNew = p.st === "new";
     const cell = (k, v, sub) => h("div", {}, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub ? h("div", { class: "s", text: sub }) : null);
     const tp = plain(r.target_pct), sp = plain(r.stop_pct), months = Math.round(r.window_days / 30.4);
@@ -1196,7 +1219,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
         st ? h("span", { class: "px" }, rupees(st.c) + " ", h("span", { class: "chg " + dir(st.chg), text: signed(st.chg) })) : null),
       h("p", { class: "sub", text: [p.n, st && st.ind].filter(Boolean).join(", ") }),
       h("div", { class: "pk-head" }, statusTag(p.st),
-        h("span", { class: "note", style: "margin:0", text: `Picked on the ${shortDate(p.d)} close · score ${fmt(p.why.sc, 0)} of 100` })),
+        h("span", { class: "note", style: "margin:0", text: `Picked on the ${shortDate(p.d)} close · score ${fmt(p.why.sc, 1)} of 100` })),
       h("div", { class: "plan" }, grid),
       owned ? h("p", { class: "note", text: "You already own this stock (it's in your Swing holdings), so buying it adds to that position." }) : null,
       h("details", { style: "margin-top:10px" }, h("summary", { style: "cursor:pointer;color:var(--deliv);font-weight:500;font-size:14px", text: "Why this stock" }),
@@ -1205,23 +1228,17 @@ td.hi { color: var(--deliv); font-weight: 600; }
         st && (p.st === "new" || p.st === "open") ? h("button", { class: "btn small", type: "button", text: "Log this trade", onclick: () => pkLog(p.s) }) : null,
         st ? h("button", { class: "btn small ghost", type: "button", text: "Stock details", onclick: () => openStock(p.s) }) : null));
   }
-  function nextPickLine(P) {
-    const latest = P.list.find((x) => x.src === "live");
-    const txt = P.note && latest ? P.note
-      : latest && P.due > DATA.asof ? `Next pick: the first trading night on or after ${longDate(P.due)}.` : null;
-    return txt ? h("p", { class: "market", style: "margin:12px 2px 0", text: txt }) : null;
-  }
   function rankCard(P) {
-    const top = P.top.map((s) => DATA.stocks.find((x) => x.s === s)).filter((x) => x && x.pk);
+    const top = P.top.map((s) => DATA.stocks.find((x) => x.s === s)).filter((x) => x && x.pk), bar = P.rules.min_score;
     const card = h("section", { class: "card" }, h("h3", { text: "Tonight's ranking" }));
     card.append(h("p", { class: "note", style: "margin-top:0", text: `${P.passing} of ${P.ranked} ranked ${DATA.universe || "Nifty 100"} stocks pass both trend checks tonight. ` +
-      (top.length ? "The best five by score:" : "") }));
+      (top.length ? `The best five by score (a pick needs ${plain(bar)} or more):` : "") }));
     if (!top.length) return card;
     card.append(h("div", { class: "tbl" }, h("table", { class: "pk-tbl" },
       h("thead", {}, h("tr", {}, ["Stock", "Score", "3-mo", "1-mo", "Delivery", "From high"].map((t) => h("th", { scope: "col", text: t })))),
       h("tbody", {}, top.map((st) => h("tr", { class: "go", onclick: () => openStock(st.s) },
         h("td", {}, st.s, h("small", { text: rupees(st.c) })),
-        h("td", { class: "hi", text: fmt(st.pk.sc, 0) }),
+        h("td", { class: st.pk.sc >= bar ? "hi" : null, text: fmt(st.pk.sc, 1) }),
         h("td", { class: dir(st.pk.v[0]), text: signed(st.pk.v[0], 1) }),
         h("td", { class: dir(st.pk.v[1]), text: signed(st.pk.v[1], 1) }),
         h("td", { class: dir(st.pk.v[2]), text: signed(st.pk.v[2], 1) }),
@@ -1238,7 +1255,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
           onclick: () => { pstate.group = k; pstate.status = "all"; renderPicks(true); } }, label, h("span", { class: "n", text: P.stats[k].n })))));
     card.append(h("p", { class: "note", style: "margin:0 0 10px", text: pstate.group === "live"
       ? "Picks the nightly run has actually published, bought at the next session's open."
-      : `The same rule replayed on stored NSE data from ${P.from ? longDate(P.from) : "the start of the history"}, one pick every ${r.every_days} days. Nobody traded these, and today's Nifty 100 list is used throughout.` }));
+      : `The same rule replayed on every night of stored NSE data from ${P.from ? longDate(P.from) : "the start of the history"}: each stock that met the criteria is counted on the first night it did. Nobody traded these, and today's Nifty 100 list is used throughout.` }));
     if (!G.n) { card.append(h("p", { class: "empty", text: pstate.group === "live" ? "No live picks yet." : "Not enough stored history to replay the rule yet." })); return card; }
     card.append(h("div", { class: "figs" },
       fig("Picks", String(G.n), null, `${G.closed} closed`),
@@ -1295,7 +1312,8 @@ td.hi { color: var(--deliv); font-weight: 600; }
       `Universe: the ${DATA.universe || "Nifty 100"}, ranked every night after NSE's closing files arrive.`,
       `Two trend checks come first: the close is above a rising 50-day average, and the stock is not stretched (no more than ${plain(P.max_ext)}% above its 20-day average or up more than ${plain(P.max_ext)}% in 5 sessions).`,
       `Score out of 100: 3-month return (${w[0]}), 1-month return (${w[1]}), delivery % over the last 10 sessions against the 50 before (${w[2]}), up days minus down days on above-average delivery (${w[3]}) and closeness to the 3-month high (${w[4]}). Each is the stock's percentile among the ranked stocks.`,
-      `One pick every ${r.every_days} calendar days: the best score that passes the checks, has no negative institutional note, and was not picked in the last ${r.window_days} days.`,
+      `A stock is named as a pick on any night it passes both checks and scores ${plain(r.min_score)} or more, provided it has no negative institutional note and was not picked in the last ${r.window_days} days.`,
+      "There is no waiting period between picks. Two can come on consecutive nights or on the same night, and some weeks bring none. When several qualify together, all are named, best score first.",
       `Buy at the next session's open. Sell at +${tp}%. Exit on the first close ${sp}% or more below the buy price, or ${r.window_days} days after buying if neither happens.`,
       "The screener counts a target as reached when the day's high touches it, a stop on the closing price, and time-up at the last close inside the window. Charges are not deducted (roughly 0.25% for a delivery round trip).",
       "The rule is new and has only the replay above as evidence. Judge it by the comparison line, and by the live picks as they close.",
@@ -1498,7 +1516,7 @@ td.hi { color: var(--deliv); font-weight: 600; }
       return;
     }
     if (!pstate.group) pstate.group = P.stats.live.closed || !P.stats.bt.n ? "live" : "bt";
-    V.replaceChildren(...[latestPickCard(P), nextPickLine(P), pkPositionsCard(), pkFormCard(P), rankCard(P), performanceCard(P), screenerCard(P), pickRulesCard(P),
+    V.replaceChildren(...[...latestPickCards(P), pkPositionsCard(), pkFormCard(P), rankCard(P), performanceCard(P), screenerCard(P), pickRulesCard(P),
       h("p", { class: "foot", text: "Picks come from a fixed rule run on NSE's closing data. They are not personal advice and say nothing about your own position size. For information only, not investment advice." })].filter(Boolean));
     if (keepScroll) window.scrollTo(0, y);
   }

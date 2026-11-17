@@ -3,8 +3,8 @@
 A phone-friendly page that shows, for every Nifty 100 stock, the day's delivery percentage, its 5, 10 and 20-day
 averages, delivered and traded quantity, volume against its 20-day average, average trade size, futures open-interest
 buildup, bulk and block deals, and a six-signal accumulation score. A market band at the top sets the size of swing
-trades (green: half size; amber and red: full size; always in cash). A Picks tab names one three-month swing pick
-every ten days and tracks how every pick did. A Research tab screens the Nifty 500 for investments of six months to
+trades (green: half size; amber and red: full size; always in cash). A Picks tab names a three-month swing pick
+whenever a Nifty 100 stock meets its criteria, with no waiting period between picks, and tracks how every pick did. A Research tab screens the Nifty 500 for investments of six months to
 two years, bought only at a margin of safety below a fair value worked out four ways. A Deals tab lists FII (and
 mutual fund) bulk and block deals in every NSE stock, with filters.
 
@@ -157,32 +157,54 @@ decimals. Past results don't promise future ones; this is not investment advice.
 
 ## The Picks tab (November 2026)
 
-Every night the job ranks all Nifty 100 stocks. Every ten days it names one pick, aiming for at least +5% within three
-months, and it keeps score on every pick.
+Every night the job ranks all Nifty 100 stocks. It names a pick whenever a stock meets the criteria below, aiming for
+at least +5% within three months, and it keeps score on every pick. There is no waiting period between picks: two can
+come on consecutive nights or on the same night, and some weeks bring none.
 
 | Step | Rule |
 |---|---|
 | Trend checks | Close above a rising 50-day average; not more than 8% above the 20-day average, and not up more than 8% in 5 sessions |
 | Score (0–100) | Percentile among the ranked stocks on: 3-month return (30), 1-month return (15), delivery % of the last 10 sessions against the 50 before (25), up days minus down days on above-average delivery over 20 sessions (15), closeness to the 3-month high (15) |
-| Pick | The best score that passes the checks, has no negative institutional note, and was not picked in the last 91 days. If nothing passes, the rule looks again the next night |
+| Pick | Every stock that passes the checks and scores 90 or more, has no negative institutional note, and was not picked in the last 91 days. When several qualify on one night, all are named, best score first. If none does, the rule looks again the next night |
 | Trade | Buy at the next session's open; sell at +5%; exit on the first close 8% or more below the buy price, or 91 days after buying |
 
-The four numbers (10 days, +5%, 91 days, −8%) are the `pick` block in `config.json`. A live pick keeps the numbers it
-was made with. Live picks are saved in `data/picks.json`, so they stay on record after the day files they were scored
+The four numbers (score 90, +5%, 91 days, −8%) are the `pick` block in `config.json`; `min_score` is the bar. A lower
+bar names more picks and a higher one fewer. A live pick keeps the numbers it was made with. Live picks are saved in `data/picks.json`, so they stay on record after the day files they were scored
 from are deleted, and a picked stock keeps being downloaded even if it leaves the index.
 
 **The screener** lists every pick with its buy price, last or exit price, result, best and worst point, days held,
 result against the Nifty 50 and status (open, target hit, stopped out, time up). It has two sets:
 
 - **Live picks**: what the nightly run actually published.
-- **Back-test**: the same rule replayed on the stored history (about ten months, growing to two years), on the same
-  ten-day grid counted back from the first live pick. It uses today's Nifty 100 list throughout, and nobody traded it.
+- **Back-test**: the same rule replayed on every night of the stored history (about ten months, growing to two years)
+  before the first live pick. Each stock that met the criteria is counted on the first night it did. It uses today's
+  Nifty 100 list throughout, and nobody traded it.
 
 Each set shows a comparison line: every ranked stock bought on the same dates with the same exits. A large-cap stock
 touches +5% at some point in three months more often than not, so the rule is only worth following if it beats that
 line. With a +5% target and a −8% stop, about 62% of closed picks must reach the target just to break even. Charges are
 not deducted (about 0.25% for a delivery round trip). The rule itself has no long back-test behind it yet; the replay
 and the live record are its evidence.
+
+**Why the bar is 90 (17 November 2026).** Until then the tab named the best-scoring stock once every ten days, whatever
+its score, and named nothing in between. The waiting period was dropped so that a stock is named on the night it
+qualifies. That needs a bar, because about 30 stocks pass the two trend checks on an ordinary night. Each bar replayed
+on the 139 nights from 22 April to 9 November 2026:
+
+| Bar (`min_score`) | Picks | Per month | Reached +5% | Average result | Pick nights less than 10 days apart |
+|---|---|---|---|---|---|
+| 80 | 67 | 10.1 | 56% (35 of 63 closed) | −1.1% | 52 of 54 |
+| 85 | 39 | 5.9 | 53% (19 of 36) | −1.7% | 30 of 35 |
+| **90** | **22** | **3.3** | **59% (13 of 22)** | **−0.9%** | **9 of 19** |
+| 92 | 14 | 2.1 | 67% (8 of 12) | 0.0% | 6 of 12 |
+
+90 keeps the number of picks about where it was (three a month) and lets the stocks set the timing: almost half the
+pick nights came less than ten days after the one before, and the longest wait was 21 days. Lower bars name many more
+picks with no better results. Higher bars look better on a dozen closed picks, which is too few to rely on. No bar here
+clearly beats the comparison line (61%) or the 62% needed to break even, so the rule is still unproven. The earlier
+ten-day replay showed 71% on 21 picks, but that figure depended on which night the ten-day count started: started on
+each of ten other nights, the same rule reached +5% on 47% to 67% of its picks. The nightly replay has no such starting
+point.
 
 **Logging your own trades.** When you buy a pick, log it on the Picks tab: stock, date, price paid and quantity. The
 target (+5%) and stop (−8%, closing basis) are filled in from the price and can be changed. The nightly file carries
@@ -398,7 +420,8 @@ through a local web server (`python -m http.server -d docs`).
 
 ## For developers
 
-`python tests/test_research.py` and `python tests/test_deals.py` check the arithmetic and the deal handling.
+`python tests/test_research.py`, `python tests/test_deals.py` and `python tests/test_picks.py` check the arithmetic,
+the deal handling and the pick rule.
 `python tests/make_sample.py sample 2026-10-23` writes made-up files in NSE's exact layouts, and
 `python radar.py update --source-dir sample --today 2026-10-23` runs the whole pipeline offline against them.
 

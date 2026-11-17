@@ -1,6 +1,6 @@
 {
   "extra_symbols": [],
-  "pick": {"every_days": 10, "target_pct": 5, "window_days": 91, "stop_pct": 8},
+  "pick": {"min_score": 90, "target_pct": 5, "window_days": 91, "stop_pct": 8},
   "research": {"pick_size": 100000, "max_positions": 0, "every_days": 0, "max_sector": 0, "max_small": 0,
                "discount_large": 20, "discount_mid": 25, "discount_small": 30,
                "stop_large": 15, "stop_mid": 18, "stop_small": 22,
